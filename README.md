@@ -1,1 +1,1 @@
-# waveSpectralAnalysis
+# Wave Spectral Analysis
