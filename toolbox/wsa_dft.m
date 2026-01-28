@@ -51,19 +51,5 @@ W(mid:Nfft) = W(mid:Nfft) - 2*pi;   %Frecuencias [pi,2pi)
 W = fftshift(W);                    %Mueve [pi,2pi) to [-pi,0)
 H = fftshift(fft(h, Nfft));         %Calcula fft y mueve las componentes
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 end
 
