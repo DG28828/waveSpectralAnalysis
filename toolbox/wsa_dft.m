@@ -34,11 +34,7 @@ function [H, W] = wsa_dft(h, Nfft)
 %Verificar existencia de Nfft
 if ~exist('Nfft', 'var')
     %Si no existe, asignar la potencia de 2 mayor mas cercana length(h).
-    i = 1;
-    while 2^i < length(h)
-        i=i+1;
-    end
-    Nfft = 2^i;
+    Nfft = 2^nextpow2(length(h));
 end
 
 %Verificar que Nfft >= N
