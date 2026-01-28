@@ -159,7 +159,7 @@ if ~espectro_cruzado
         x_r = X((r-1)*R+1:(r-1)*R+N).*w;
     
         % Periodograma
-        [H_r, W] = dtft(x_r, Nfft);
+        [H_r, W] = wsa_dft(x_r, Nfft);
         I_n = (1/(N*U))*abs(H_r).^2;
        
         I_acum = I_acum + I_n;
@@ -172,8 +172,8 @@ else
         y_r = Y((r-1)*R+1:(r-1)*R+N).*w;
     
         % Periodogramas
-        [H_x_r, W] = dtft(x_r, Nfft);
-        [H_y_r, ~] = dtft(y_r, Nfft);
+        [H_x_r, W] = wsa_dft(x_r, Nfft);
+        [H_y_r, ~] = wsa_dft(y_r, Nfft);
     
         I_xy_n = (1/(N*U))*H_x_r.*conj(H_y_r);
        
