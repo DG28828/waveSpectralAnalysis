@@ -78,21 +78,39 @@ espectro_cruzado = ~isempty(Y);
 
 %% Verificaciones iniciales
 
-%Verificar que X es vector columna
-[row_size, ~] = size(X);
-X_length = length(X);
-if row_size ~= X_length
+%Verificar tamaños consistentes entre X e Y
+if ~isempty(Y) && length(Y) ~= length(X)
+    error('X e Y deben tener la misma longitud para el cálculo de la densidad espectral cruzada');
+end
+
+%Verificar que X e Y son vector columna
+if size(X, 1) ~= length(X)
     X = X';
+end
+if ~isempty(Y)
+    if size(Y, 1) ~= length(Y)
+        Y = Y';
+    end
 end
 
 % Consistencia entre M y tamaño de X
+X_length = length(X);
 if M > X_length
     M = X_length;
-    warning('Se especificó un valor de M mayor a la longitud de X,  haciendo M = %d', M)
+    if isempty(Y)
+        warning('Se especificó un valor de M mayor a la longitud de X,  haciendo M = %d', M)
+    else
+        warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
+    end
 elseif M < X_length
-    warning('Se especificó un valor de M menor a la longitud de X, recortando los valores correspondientes de X')
-    %X = zeros(M, 1);
-    X = X(1:M);
+    if isempty(Y)
+        warning('Se especificó un valor de M menor a la longitud de X, recortando los valores correspondientes de X')
+        X = X(1:M);
+    else
+        warning('Se especificó un valor de M menor a la longitud de X, recortando los valores correspondientes de X')
+        X = X(1:M);
+        Y = Y(1:M);
+    end
 end
 
 % Verificar tamaño completo de los segmentos especificados
@@ -106,8 +124,10 @@ while mod(razon, 1) ~= 0
 end
 if M ~= M_new
     M = M_new;
-    %X = zeros(M, 1);
     X = X(1:M);
+    if isempty(Y)
+        Y = Y(1:M);
+    end
     warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d y se recortaron los datos correspondientes', M)
 end
 

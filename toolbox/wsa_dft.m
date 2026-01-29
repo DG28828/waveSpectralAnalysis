@@ -52,7 +52,7 @@ end
 
 %% Cálculo de la fft
 n = 0:1:(Nfft-1);
-W = (2*pi/Nfft)*n';                 %Arreglo de frecuencias [-pi,pi)
+W = (2*pi/Nfft)*n';                 %Arreglo de frecuencias [0,2pi)
 mid = ceil(Nfft/2) + 1;             %Mitad del areglo
 W(mid:Nfft) = W(mid:Nfft) - 2*pi;   %Frecuencias [pi,2pi)
 W = fftshift(W);                    %Mueve [pi,2pi) to [-pi,0)
