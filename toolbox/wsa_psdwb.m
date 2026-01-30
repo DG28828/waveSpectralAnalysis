@@ -125,7 +125,7 @@ end
 if M ~= M_new
     M = M_new;
     X = X(1:M);
-    if isempty(Y)
+    if ~isempty(Y)
         Y = Y(1:M);
     end
     warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d y se recortaron los datos correspondientes', M)
