@@ -1,4 +1,4 @@
-function [I, W] = wsa_psdwb(X, N, N0, ventana, varargin)
+function [I, W] = wsa_psdwb(X, ventana, varargin)
 %wsa_psdwb - densidad espectral de potencia mediante el método de Welch-Barlett.
 %
 %   Esta función realiza la estimación de la densidad espectral de potencia 
@@ -7,19 +7,30 @@ function [I, W] = wsa_psdwb(X, N, N0, ventana, varargin)
 %   de X e Y.
 %
 %   Sintaxis:
-%       I = wsa_wbpsd(X, N, N0, ventana)
-%       I = wsa_wbpsd(X, N, N0, ventana, 'M', M, 'K', K, 'Nfft', Nfft, 'Y', Y)
+%       I = wsa_psdwb(X, ventana)
+%       I = wsa_psdwb(X, ventana, 'Y', Y)
+%       I = wsa_psdwb(X, ventana, 'N', N)
+%       I = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
+%       I = wsa_psdwb(X, ventana, 'K', 'Nfft')
+%       I = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
+%       I = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pw', 1)
 %
-%       [I, W] = wsa_wbpsd(X, N, N0, ventana)
-%       [I, W] = wsa_wbpsd(X, N, N0, ventana, 'M', M, 'K', K, 'Nfft', Nfft, 'Y', Y)
+%
+%       [I, W] = wsa_psdwb(X, ventana)
+%       [I, W] = wsa_psdwb(X, ventana, 'Y', Y)
+%       [I, W] = wsa_psdwb(X, ventana, 'N', N)
+%       [I, W] = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
+%       [I, W] = wsa_psdwb(X, ventana, 'K', 'Nfft')
+%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
+%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pw', 1)
 %
 %   Argumentos de entrada:
 %       X - Arreglo de entrada X 
 %           vector
 %       N - Longitud del segmento
-%           entero (potencia de 2)
+%           entero | (opcional) Por defecto: N = 2*M/(K+1) 
 %       N0 - Longitud del solapamiento entre los segmentos
-%           entero
+%           entero (opcional) Por defecto: N0 = N/2  (50 %)
 %       ventana - ventana a emplear 
 %           string ("rectangular", "hann", "hamming")
 %       M - Longitud de la secuencia de entrada 
@@ -31,6 +42,9 @@ function [I, W] = wsa_psdwb(X, N, N0, ventana, varargin)
 %           la potencia de 2 mayor mas cercana a N y 512.
 %       Y - Arreglo de entrada Y 
 %           vector | (opcional) Por defecto: []
+%       pw - Bandera para imprimir warnings (print warnings): brinda
+%       información acerca de modificaciones en valores de M, N, N0, K, Nfft
+%           bool | (opcional) Por defecto: 0
 %
 %   Argumentos de salida:
 %       I - Estimador del espectro de potencia 
@@ -43,38 +57,51 @@ function [I, W] = wsa_psdwb(X, N, N0, ventana, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 28/01/2026
-% Fecha de modificación: 28/01/2026
+% Fecha de modificación: 30/01/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
 
 %Valores por defecto
-M_default = length(X);
-K_default = floor((M_default - N0)/(N - N0));
-Nfft_default = max(512, 2^nextpow2(N));
+M_default = length(X);                          %Por defecto M es la longitud de X
+K_default = 8;                                  %Por defecto K = 8 para que sean 16 GDL
+M_new = M_default;
+while mod(2*M_new/(K_default+1), 1) ~= 0
+    M_new = M_new-1;
+end
+M_default = M_new;                              %Modificar M para que N = 2M/(K+1) sea entero
+N_default = 2*M_default/(K_default+1);          %N = 2M/(K+1) hace que K = (M-N0)/(N-N0) sea entero cuando N0 = N/2
+N0_default = N_default/2;                       %Hacer que N0 = N/2
+Nfft_default = max(512, 2^nextpow2(N_default));
+pw_default = 0;
 
 %Input parser
 p = inputParser;
 
 addRequired(p, 'X');
-addRequired(p, 'N');
-addRequired(p, 'N0');
 addRequired(p, 'ventana');
 
+addParameter(p, 'N', N_default);
+addParameter(p, 'N0', N0_default);
 addParameter(p, 'M',    M_default);
 addParameter(p, 'K',    K_default);
 addParameter(p, 'Nfft', Nfft_default);
 addParameter(p, 'Y',    []);
+addParameter(p, 'pw',    pw_default);
 
-parse(p, X, N, N0, ventana, varargin{:});
+parse(p, X, ventana, varargin{:});
 
 %Resultados
 M    = p.Results.M;
+N    = p.Results.N;
+N0   = p.Results.N0;
 K    = p.Results.K;
 Nfft = p.Results.Nfft;
 Y    = p.Results.Y;
+pw   = p.Results.pw;
 
 espectro_cruzado = ~isempty(Y);
+
 
 %% Verificaciones iniciales
 
@@ -93,50 +120,150 @@ if ~isempty(Y)
     end
 end
 
-% Consistencia entre M y tamaño de X
+%Verificar tamaños de entradas opcionales
+if N~=N_default && N>M
+    error('N no puede ser mayor que M')
+elseif N~=N_default && mod(N, 2) ~= 0
+    error('N debe ser un múltiplo de 2')
+elseif N0~=N0_default && N0>N
+    error('N0 no puede ser mayor que N')
+end
+
+%% Actualización de parámetros para consistencia de los cálculos y prioridades
+%Modificar resultados de acuerdo a prioridades de parametros introducidos
+%Prioridades:
+%   1) Valor de K es prioritario, si se especifica, los valores de M, N y N0
+%       resultantes dependerán si además se especifica N, N0 o ambos.
+
+if K~=K_default
+    if pw
+        warning('Especificado valor de K, ajustando los demás parámetros:')
+    end
+    if K < 1
+        error('K no puede ser menor a 1')
+    else
+        if N ~= N_default
+            if N0 ~= N0_default
+                %%%%% Caso: 'K', 'N', 'N0' %%%%%
+                % Acciones: 
+                %   1) Recortar M tal que M = K(N-N0)+N0
+                M = K*(N-N0)+N0;         
+                if pw
+                    warning('    M = %d', M)
+                end
+            else 
+                %%%%% Caso: 'K', 'N' %%%%%
+                % Acciones: 
+                %   1) Hacer N0 = N/2
+                %   2) Recortar M tal que M = K(N-N0)+N0
+                N0 = N/2;               
+                M = K*(N-N0)+N0;         
+                if pw
+                    warning('    M = %d', M)
+                    warning('    N0 = %d', N0)
+                end
+            end
+        else %N == N_default
+            if N0 ~= N0_default
+                %%%%% Caso: 'K', 'N0' %%%%%
+                % Acciones:
+                %   1) Ajustar M tal que cumpla que N = (M - N0 + K*N0)/(K) es entero
+                %   2) Hacer N = (M - N0 + K*N0)/(K)
+                M_new = M;
+                while mod((M_new - N0 + K*N0)/(K), 1) ~= 0
+                    M_new = M_new-1;
+                end
+                M = M_new;                  
+                N = (M - N0 + K*N0)/(K);    
+                Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
+                if pw
+                    warning('    M = %d', M)
+                    warning('    N = %d', N)
+                    warning('    Nfft = %d', Nfft)
+                end
+            else
+                %%%%% Caso: 'K', %%%%%
+                % Acciones:
+                %   1) Ajustar M tal que cumpla que N = 2*M/(K+1) es entero
+                %   2) Hacer N = 2*M/(K+1)
+                %   3) Hacer N0 = N/2
+                M_new = M;
+                while mod(2*M_new/(K+1), 1) ~= 0
+                    M_new = M_new-1;
+                end
+                M = M_new;                  
+                N = 2*M/(K+1);              
+                N0 = N/2;                   
+                Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
+                if pw
+                    warning('    M = %d', M)
+                    warning('    N = %d', N)
+                    warning('    N0 = %d', N0)
+                    warning('    Nfft = %d', Nfft)
+                end
+            end            
+        end
+    end
+else %K = K_default
+    % Verificar tamaño completo de los segmentos especificados
+    % Se reduce el valor de M hasta que se cumpla que la razón (M-N0)/(N-N0) es
+    % un número entero
+    razon = (M-N0)/(N-N0);
+    M_new = M;
+    while mod(razon, 1) ~= 0
+        M_new = M_new-1;
+        razon = (M_new-N0)/(N-N0);
+    end
+    if M ~= M_new
+        M = M_new; 
+        if pw
+            warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d', M)
+        end
+    end
+    % hacer coincidir K con la relación (M-N0)/(N-N0)
+    if K ~= razon
+        K = razon;
+        if pw
+            warning('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d', K)
+        end
+    end
+end
+
+
+% Consistencia entre M y tamaño de X e Y
+% Esta es la última verificación en la que se modifican los arreglos X e Y
+% dependiendo del valor resultante de M de las verificaciones anteriores.
+% Se recortan los valores de X e Y correspondientes desde el final.
 X_length = length(X);
 if M > X_length
-    M = X_length;
     if isempty(Y)
-        warning('Se especificó un valor de M mayor a la longitud de X,  haciendo M = %d', M)
+        if pw
+            error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
+        end
     else
-        warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
+        if pw
+            warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
+        end
     end
 elseif M < X_length
     if isempty(Y)
-        warning('Se especificó un valor de M menor a la longitud de X, recortando los valores correspondientes de X')
+        if pw
+            warning('El valor de M es menor a la longitud de X, recortando los valores correspondientes de X')
+        end
         X = X(1:M);
     else
-        warning('Se especificó un valor de M menor a la longitud de X, recortando los valores correspondientes de X')
+        if pw
+            warning('El valor de M es menor a la longitud de X e Y, recortando los valores correspondientes de X e Y')
+        end
         X = X(1:M);
         Y = Y(1:M);
     end
 end
 
-% Verificar tamaño completo de los segmentos especificados
-% Se reduce el valor de M hasta que se cumpla que la razón (M-N0)/(N-N0) es
-% un número entero
-razon = (M-N0)/(N-N0);
-M_new = M;
-while mod(razon, 1) ~= 0
-    M_new = M_new-1;
-    razon = (M_new-N0)/(N-N0);
+%Imprimir parámetros resultantes
+if pw
+    warning('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d', M, N, N0, K, Nfft)
 end
-if M ~= M_new
-    M = M_new;
-    X = X(1:M);
-    if ~isempty(Y)
-        Y = Y(1:M);
-    end
-    warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d y se recortaron los datos correspondientes', M)
-end
-
-% hacer coincidir K con la relación (M-N0)/(N-N0)
-if K ~= razon
-    K = razon;
-    warning('El valor de K especificado no cumple K = (M-N0)/(N-N0). Se ajustó el valor a K = %d', K)
-end
-
 %% Constante de normalización U
 % Esta constante se emplea para normalizar la energía de la ventana de
 % forma que el periodograma resultante sea asintóticamente insesgado.
