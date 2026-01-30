@@ -137,7 +137,7 @@ end
 
 if K~=K_default
     if pw
-        warning('Especificado valor de K, ajustando los demás parámetros:')
+        fprintf('Especificado valor de K, ajustando los demás parámetros:\n')
     end
     if K < 1
         error('K no puede ser menor a 1')
@@ -149,18 +149,18 @@ if K~=K_default
                 %   1) Recortar M tal que M = K(N-N0)+N0
                 M = K*(N-N0)+N0;         
                 if pw
-                    warning('    M = %d', M)
+                    fprintf('    M = %d\n', M)
                 end
             else 
                 %%%%% Caso: 'K', 'N' %%%%%
                 % Acciones: 
                 %   1) Hacer N0 = N/2
                 %   2) Recortar M tal que M = K(N-N0)+N0
-                N0 = N/2;               
+                N0 = floor(N/2);               
                 M = K*(N-N0)+N0;         
                 if pw
-                    warning('    M = %d', M)
-                    warning('    N0 = %d', N0)
+                    fprintf('    M = %d\n', M)
+                    fprintf('    N0 = %d\n', N0)
                 end
             end
         else %N == N_default
@@ -177,9 +177,9 @@ if K~=K_default
                 N = (M - N0 + K*N0)/(K);    
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
                 if pw
-                    warning('    M = %d', M)
-                    warning('    N = %d', N)
-                    warning('    Nfft = %d', Nfft)
+                    warning('    M = %d\n', M)
+                    warning('    N = %d\n', N)
+                    warning('    Nfft = %d\n', Nfft)
                 end
             else
                 %%%%% Caso: 'K', %%%%%
@@ -193,13 +193,13 @@ if K~=K_default
                 end
                 M = M_new;                  
                 N = 2*M/(K+1);              
-                N0 = N/2;                   
+                N0 = floor(N/2);                   
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
                 if pw
-                    warning('    M = %d', M)
-                    warning('    N = %d', N)
-                    warning('    N0 = %d', N0)
-                    warning('    Nfft = %d', Nfft)
+                    fprintf('    M = %d\n', M)
+                    fprintf('    N = %d\n', N)
+                    fprintf('    N0 = %d\n', N0)
+                    fprintf('    Nfft = %d\n', Nfft)
                 end
             end            
         end
@@ -222,9 +222,11 @@ else %K = K_default
     end
     % hacer coincidir K con la relación (M-N0)/(N-N0)
     if K ~= razon
-        K = razon;
+        K = floor(razon);
+        M = K*(N-N0) + N0;
         if pw
             warning('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d', K)
+            warning('Se ajustó el valor de M a M = %d', M)
         end
     end
 end
@@ -237,9 +239,7 @@ end
 X_length = length(X);
 if M > X_length
     if isempty(Y)
-        if pw
             error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
-        end
     else
         if pw
             warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
@@ -262,7 +262,7 @@ end
 
 %Imprimir parámetros resultantes
 if pw
-    warning('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d', M, N, N0, K, Nfft)
+    fprintf('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d', M, N, N0, K, Nfft)
 end
 %% Constante de normalización U
 % Esta constante se emplea para normalizar la energía de la ventana de
@@ -271,17 +271,16 @@ end
 % Calculado de acuerdo con (10.64) de (Oppenheim, A. V., 2000), pag 736.
 
 % Ventana de longitud N
-w = zeros(N, 1);    %inicialzar variable
-if ventana == "rectangular"
-    w(1:end) = rectwin(N);
-elseif ventana == "hann"
-    w(1:end) = hanning(N);
-elseif ventana == "hamming"
-    w(1:end) = hamming(N);
-else
-    error('Debe especificar alguna de las siguientes ventanas: "rectangular", "hann", "hamming"')
+switch lower(string(ventana))
+    case "rectangular"
+        w = rectwin(N);
+    case "hann"
+        w = hanning(N);
+    case "hamming"
+        w = hamming(N);
+    otherwise
+        error('Debe especificar alguna de las siguientes ventanas: "rectangular", "hann", "hamming"')
 end
-
 U = mean(w.^2);
 
 %% Método de Welch-Barlett
