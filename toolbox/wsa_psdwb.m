@@ -13,7 +13,7 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %       I = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
 %       I = wsa_psdwb(X, ventana, 'K', 'Nfft')
 %       I = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
-%       I = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pw', 1)
+%       I = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
 %
 %       [I, W] = wsa_psdwb(X, ventana)
@@ -22,7 +22,7 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %       [I, W] = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
 %       [I, W] = wsa_psdwb(X, ventana, 'K', 'Nfft')
 %       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
-%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pw', 1)
+%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
 %   Argumentos de entrada:
 %       X - Arreglo de entrada X 
@@ -42,7 +42,7 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %           la potencia de 2 mayor mas cercana a N y 512.
 %       Y - Arreglo de entrada Y 
 %           vector | (opcional) Por defecto: []
-%       pw - Bandera para imprimir warnings (print warnings): brinda
+%       pc - Bandera para imprimir en consola (print consle): brinda
 %       información acerca de modificaciones en valores de M, N, N0, K, Nfft
 %           bool | (opcional) Por defecto: 0
 %
@@ -73,7 +73,7 @@ M_default = M_new;                              %Modificar M para que N = 2M/(K+
 N_default = 2*M_default/(K_default+1);          %N = 2M/(K+1) hace que K = (M-N0)/(N-N0) sea entero cuando N0 = N/2
 N0_default = N_default/2;                       %Hacer que N0 = N/2
 Nfft_default = max(512, 2^nextpow2(N_default));
-pw_default = 0;
+pc_default = 0;
 
 %Input parser
 p = inputParser;
@@ -87,7 +87,7 @@ addParameter(p, 'M',    M_default);
 addParameter(p, 'K',    K_default);
 addParameter(p, 'Nfft', Nfft_default);
 addParameter(p, 'Y',    []);
-addParameter(p, 'pw',    pw_default);
+addParameter(p, 'pc',    pc_default);
 
 parse(p, X, ventana, varargin{:});
 
@@ -98,7 +98,7 @@ N0   = p.Results.N0;
 K    = p.Results.K;
 Nfft = p.Results.Nfft;
 Y    = p.Results.Y;
-pw   = p.Results.pw;
+pc   = p.Results.pc;
 
 espectro_cruzado = ~isempty(Y);
 
@@ -136,7 +136,7 @@ end
 %       resultantes dependerán si además se especifica N, N0 o ambos.
 
 if K~=K_default
-    if pw
+    if pc
         fprintf('Especificado valor de K, ajustando los demás parámetros:\n')
     end
     if K < 1
@@ -148,7 +148,7 @@ if K~=K_default
                 % Acciones: 
                 %   1) Recortar M tal que M = K(N-N0)+N0
                 M = K*(N-N0)+N0;         
-                if pw
+                if pc
                     fprintf('    M = %d\n', M)
                 end
             else 
@@ -158,7 +158,7 @@ if K~=K_default
                 %   2) Recortar M tal que M = K(N-N0)+N0
                 N0 = floor(N/2);               
                 M = K*(N-N0)+N0;         
-                if pw
+                if pc
                     fprintf('    M = %d\n', M)
                     fprintf('    N0 = %d\n', N0)
                 end
@@ -176,7 +176,7 @@ if K~=K_default
                 M = M_new;                  
                 N = (M - N0 + K*N0)/(K);    
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
-                if pw
+                if pc
                     warning('    M = %d\n', M)
                     warning('    N = %d\n', N)
                     warning('    Nfft = %d\n', Nfft)
@@ -195,7 +195,7 @@ if K~=K_default
                 N = 2*M/(K+1);              
                 N0 = floor(N/2);                   
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
-                if pw
+                if pc
                     fprintf('    M = %d\n', M)
                     fprintf('    N = %d\n', N)
                     fprintf('    N0 = %d\n', N0)
@@ -216,7 +216,7 @@ else %K = K_default
     end
     if M ~= M_new
         M = M_new; 
-        if pw
+        if pc
             warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d', M)
         end
     end
@@ -224,7 +224,7 @@ else %K = K_default
     if K ~= razon
         K = floor(razon);
         M = K*(N-N0) + N0;
-        if pw
+        if pc
             warning('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d', K)
             warning('Se ajustó el valor de M a M = %d', M)
         end
@@ -241,18 +241,18 @@ if M > X_length
     if isempty(Y)
             error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
     else
-        if pw
+        if pc
             warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
         end
     end
 elseif M < X_length
     if isempty(Y)
-        if pw
+        if pc
             warning('El valor de M es menor a la longitud de X, recortando los valores correspondientes de X')
         end
         X = X(1:M);
     else
-        if pw
+        if pc
             warning('El valor de M es menor a la longitud de X e Y, recortando los valores correspondientes de X e Y')
         end
         X = X(1:M);
@@ -261,8 +261,8 @@ elseif M < X_length
 end
 
 %Imprimir parámetros resultantes
-if pw
-    fprintf('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d', M, N, N0, K, Nfft)
+if pc
+    fprintf('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d\n\n', M, N, N0, K, Nfft)
 end
 %% Constante de normalización U
 % Esta constante se emplea para normalizar la energía de la ventana de
