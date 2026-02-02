@@ -86,5 +86,15 @@ K = DoF/2;
 Nfft = 2^nextpow2(4*length(eta));
 [I, W] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 
-S = 2*I(W>=0); %Convertir psd bilateral a espectro unilateral
-f = fs*W(W>=0)/pi;
+%Convertir psd bilateral a espectro unilateral y convertir 
+% unidades de [unidad de eta]^2/rad/muestra a [unidad de eta]^2/rad/s *
+S = 2*I(W>=0)/fs;           
+f = fs*W(W>=0)/(2*pi);
+
+% *Esta conversión es la siguiente:
+%       W:  frecuencia angular digital [rad/muestra]
+%       fs: frecuencia de muestreo [muestra/s]
+%       f:  frecuencia física [rad/s] = [rad/muestra]/[s/muestra]
+
+
+end
