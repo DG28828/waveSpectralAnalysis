@@ -19,7 +19,7 @@ function [H, W] = wsa_dft(h, Nfft)
 %
 %   Argumentos de salida:
 %       H - valores de la dft (números complejos)
-%       W - vector de frecuencias [-pi,pi)
+%       W - vector de frecuencia angular digital (rad/muestra) [-pi,pi)
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
