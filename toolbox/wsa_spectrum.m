@@ -23,9 +23,9 @@ function [S, f] = wsa_spectrum(eta, fs, varargin)
 %           bool | (opcional) Por defecto: 0
 %
 %   Argumentos de salida:
-%       S - estimador del espectro de energía unilateral 
+%       S - estimador del espectro de energía unilateral [unidad de eta]^2/Hz
 %           vector
-%       f - frecuencias 
+%       f - frecuencias físicas Hz
 %           vector
 %
 % -------------------------------------------------------------------------
