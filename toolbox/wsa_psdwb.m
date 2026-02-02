@@ -47,7 +47,7 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %           bool | (opcional) Por defecto: 0
 %
 %   Argumentos de salida:
-%       I - Estimador del espectro de potencia por rad/muestra
+%       I - Estimador del espectro de potencia por rad/muestra [unidad de X]^2/rad/muestra
 %           vector
 %       W - Frecuencias angulares digitales (rad/muestra)
 %           vector
