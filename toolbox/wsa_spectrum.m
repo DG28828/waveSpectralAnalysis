@@ -16,7 +16,7 @@ function [S, f] = wsa_spectrum(eta, fs, varargin)
 %       fs - frecuencia de muestreo (Hz)
 %           entero
 %       DoF - grados de libertad (Degrees of Freedom) del espectro. Debe
-%       ser mayor a 2.
+%       ser entero, par, mayor a 2.
 %           entero | (opcional) Por defecto: DoF = 16
 %       pc - Bandera para imprimir en consola (print consle): brinda
 %       información acerca de modificaciones en valores de M, N, N0, K, Nfft
@@ -65,8 +65,8 @@ if size(eta, 1) ~= length(eta)
 end
 
 if DoF ~= DoF_default
-    if DoF <= 2
-        error('DoF debe ser mayor a 2')
+    if DoF <= 2 || mod(DoF, 1) ~= 0 || mod(DoF, 2) ~= 0
+        error('DoF debe ser entero, par, mayor a 2')
     end
 end
 
