@@ -84,7 +84,7 @@ end
 
 ventana = "hann";    
 K = DoF/2;
-Nfft = 2^nextpow2(4*length(eta));
+Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 [I, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 
 %Convertir psd bilateral a espectro unilateral y convertir 
