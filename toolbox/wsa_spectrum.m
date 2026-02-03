@@ -1,4 +1,4 @@
-function [S, f] = wsa_spectrum(eta, fs, varargin)
+function [S, f, info] = wsa_spectrum(eta, fs, varargin)
 %wsa_spectrum - espectro de energía.
 %
 %   Esta función estima el espectro de energía de un registro de mediciones 
@@ -27,7 +27,8 @@ function [S, f] = wsa_spectrum(eta, fs, varargin)
 %           vector
 %       f - frecuencias físicas Hz
 %           vector
-%
+%       info - Información de parámetros finales del cálculo
+%           struct
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
@@ -84,7 +85,7 @@ end
 ventana = "hann";    
 K = DoF/2;
 Nfft = 2^nextpow2(4*length(eta));
-[I, W] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[I, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 
 %Convertir psd bilateral a espectro unilateral y convertir 
 % unidades de [unidad de eta]^2/rad/muestra a [unidad de eta]^2/rad/s *
@@ -96,5 +97,7 @@ f = fs*W(W>=0)/(2*pi);
 %       fs: frecuencia de muestreo [muestra/s]
 %       f:  frecuencia física [rad/s] = [rad/muestra]/[s/muestra]
 
+%Agregar información adicional al struct de info
+info.fs = fs;
 
 end

@@ -1,4 +1,4 @@
-function [I, W] = wsa_psdwb(X, ventana, varargin)
+function [I, W, info] = wsa_psdwb(X, ventana, varargin)
 %wsa_psdwb - densidad espectral de potencia mediante el método de Welch-Barlett.
 %
 %   Esta función realiza la estimación de la densidad espectral de potencia 
@@ -32,7 +32,7 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %       N0 - Longitud del solapamiento entre los segmentos
 %           entero (opcional) Por defecto: N0 = N/2  (50 %)
 %       ventana - ventana a emplear 
-%           string ("rectangular", "hann", "hamming")
+%           string ("rectangular", "hann", "hamming") | vector
 %       M - Longitud de la secuencia de entrada 
 %           entero | (opcional) Por defecto: M = longitud de X
 %       K - Número de segmentos
@@ -51,6 +51,8 @@ function [I, W] = wsa_psdwb(X, ventana, varargin)
 %           vector
 %       W - Frecuencias angulares digitales (rad/muestra)
 %           vector
+%       info - Información de parámetros finales del cálculo
+%           struct
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
@@ -264,6 +266,7 @@ end
 if pc
     fprintf('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d\n\n', M, N, N0, K, Nfft)
 end
+
 %% Constante de normalización U
 % Esta constante se emplea para normalizar la energía de la ventana de
 % forma que el periodograma resultante sea asintóticamente insesgado.
@@ -328,3 +331,13 @@ else
 end
 
 I = I_acum./K;   % Periodograma promedio
+
+%Guardar parámetros empleados
+info = struct;
+info.M = M;
+info.N = N;
+info.N0 = N0;
+info.K = K;
+info.Nfft = Nfft;
+info.DoF = 2*K;
+info.window = ventana;
