@@ -16,13 +16,13 @@ function [I, W, info] = wsa_psdwb(X, ventana, varargin)
 %       I = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
 %
-%       [I, W] = wsa_psdwb(X, ventana)
-%       [I, W] = wsa_psdwb(X, ventana, 'Y', Y)
-%       [I, W] = wsa_psdwb(X, ventana, 'N', N)
-%       [I, W] = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
-%       [I, W] = wsa_psdwb(X, ventana, 'K', 'Nfft')
-%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
-%       [I, W] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
+%       [I, W, info] = wsa_psdwb(X, ventana)
+%       [I, W, info] = wsa_psdwb(X, ventana, 'Y', Y)
+%       [I, W, info] = wsa_psdwb(X, ventana, 'N', N)
+%       [I, W, info] = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
+%       [I, W, info] = wsa_psdwb(X, ventana, 'K', 'Nfft')
+%       [I, W, info] = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
+%       [I, W, info] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
 %   Argumentos de entrada:
 %       X - Arreglo de entrada X 
