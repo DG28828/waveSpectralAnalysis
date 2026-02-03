@@ -275,7 +275,7 @@ switch lower(string(ventana))
     case "rectangular"
         w = rectwin(N);
     case "hann"
-        w = hanning(N);
+        w = hann(N);
     case "hamming"
         w = hamming(N);
     otherwise
