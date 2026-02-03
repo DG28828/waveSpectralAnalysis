@@ -16,7 +16,7 @@ function [S, f, info] = wsa_spectrum(eta, fs, varargin)
 %       fs - frecuencia de muestreo (Hz)
 %           entero
 %       DoF - grados de libertad (Degrees of Freedom) del espectro. Debe
-%       ser entero, par, mayor a 2.
+%       ser entero, par, mayor o igual a 2.
 %           entero | (opcional) Por defecto: DoF = 16
 %       pc - Bandera para imprimir en consola (print consle): brinda
 %       información acerca de modificaciones en valores de M, N, N0, K, Nfft
@@ -66,8 +66,8 @@ if size(eta, 1) ~= length(eta)
 end
 
 if DoF ~= DoF_default
-    if DoF <= 2 || mod(DoF, 1) ~= 0 || mod(DoF, 2) ~= 0
-        error('DoF debe ser entero, par, mayor a 2')
+    if DoF < 2 || mod(DoF, 1) ~= 0 || mod(DoF, 2) ~= 0
+        error('DoF debe ser entero, par, mayor o igual a 2')
     end
 end
 
@@ -97,7 +97,17 @@ f = fs*W(W>=0)/(2*pi);
 %       fs: frecuencia de muestreo [muestra/s]
 %       f:  frecuencia física [rad/s] = [rad/muestra]/[s/muestra]
 
+%Validación energética:
+%   Se verifica el cumplimiento de integral_0_inf(S(f)df) = varianza
+m0 = trapz(f, S);       %El momento de primer orden es el área bajo la curva
+var_eta = var(eta);     %Varianza de la señal de entrada
+error_relativo = 100*abs(m0-var_eta)/var_eta;
+if pc
+    fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n', m0, var_eta, error_relativo)
+end
+
 %Agregar información adicional al struct de info
 info.fs = fs;
+info.error_relativo = error_relativo;
 
 end
