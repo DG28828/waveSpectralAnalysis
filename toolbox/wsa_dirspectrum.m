@@ -68,7 +68,15 @@ parse(p, eta, u, v, fs, varargin{:});
 DoF    = p.Results.DoF;
 pc     = p.Results.pc;
 
-%%
+%% Cálculo del espectro direccional
+%   Esta función llama a las siguientes funciones:
+%       - wsa_spectrum: calcula el espectro frecuencial S(f) a partir de eta
+%       - wsa_puvcoeffs: calcula los coeficientes de la serie de Fourier a1,
+%                       a2, b1, b2 a partir de eta, u y v.
+%       - wsa_dirmem: estima la distribución direccional D(f, theta) a partir
+%                       de los coeficientes de la serie de Fourier.
+%
+%       Posteriormente, calcula E(f, theta) = S(f)*D(f, theta).
 
 %Espectro frecuencial
 [S, f, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
