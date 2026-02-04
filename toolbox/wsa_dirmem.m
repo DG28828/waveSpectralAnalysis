@@ -22,9 +22,9 @@ function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %           vector
 %
 %   Argumentos de salida:
-%       D - Valores de distribución direccional
+%       D - Valores de distribución direccional [eta^2 / Hz / rad]
 %           vector
-%       theta - Angulos
+%       theta - Angulos [rad]
 %           vector
 %
 % -------------------------------------------------------------------------

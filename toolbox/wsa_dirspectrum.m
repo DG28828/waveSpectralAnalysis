@@ -92,6 +92,9 @@ d4 = coeffs.b2;
 Ntheta = 360;
 [D, theta] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
 
+theta = theta*180/pi;   %Se convierte theta de [rad] a [°]
+D = D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
+
 % Espectro direccional
 E = zeros(size(D));
 for i = 1:length(S(1:end-1))
@@ -99,7 +102,8 @@ for i = 1:length(S(1:end-1))
 end
 
 f = f(1:end-1);
-theta = theta*180/pi;
+
+
 
 % Información
 info = struct;
