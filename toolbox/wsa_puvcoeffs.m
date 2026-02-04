@@ -1,19 +1,60 @@
-function [coeffs, info] = wsa_puvcoeffs(eta, u, v)
+function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v)
+%wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos PUV.
+%
+%   Esta función estima los primeros 4 coeficientes de la serie de Fourier
+%   a1, a2, b1, b2 a partir de datos derivados de mediciones PUV (presión y
+%   velocidades orbitales). Los datos de entrada deben estar ubicados en
+%   superficie y adecuadamente corregidos hidrodinámicamente.
+%
+%   Sintaxis:
+%
+%
+%   Argumentos de entrada:
+%       eta - secuencia de superficie libre 
+%           vector
+%       u - secuencia de velocidades orbitales en X
+%           vector
+%       v - secuencia de velocidades orbitales en Y
+%           vector
+%
+%   Argumentos de salida:
+%       coeffs - coeficientes de la serie de Fourier (a1, a2, b1, b2)
+%           struct
+%       info - Información de parámetros finales del cálculo
+%           struct
+% -------------------------------------------------------------------------
+% Universidad de Costa Rica
+% Escuela de Ingeniería Civil
+% Autor: Danny Garro Arias
+% Fecha de creación: 03/02/2026
+% Fecha de modificación: 03/02/2026
+% -------------------------------------------------------------------------
+
+%%
 
 
+%% Cálculo de los coeficientes
+%   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
+%   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
+%   artículo "Observations of the Directional Spectrum of Sea Waves Using
+%   the Motions of a Floating Buoy".
 
+%Parámetros para las densidades espectrales cruzadas
 DoF = 16;
 ventana = "hann";    
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 
-[Spp, W, info_psdwb] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft);
+%Densidades espectrales cruzadas
+[Spp, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft);
 Suu = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft);
 Svv = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft);
 Spu = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft);
 Spv = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft);
 Suv = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft);
 
+%Partes real y de interés de las densidades espectrales cruzadas
+%   Sxy = Cxy + i*Qxy
 C11 = real(Spp);
 C22 = real(Suu);
 C33 = real(Svv);
@@ -21,7 +62,22 @@ C23 = real(Suv);
 Q12 = imag(Spu);
 Q13 = imag(Spv);
 
-a1 = Q12./sqrt(C11.*(C22+C33));
-a2 = Q13./sqrt(C11.*(C22+C33));
-b1 = (C22-C33)./(C22+C33);
-b2 = 2*C23./(C22+C33);
+%Cálculo de coeficientes
+%   Se suma "eps" a cada denominador, esto para evitar posibles problemas
+%   de división por 0 y así no obtener NaNs o Infs.
+a1 = Q12./(sqrt(C11.*(C22+C33))+eps);
+a2 = Q13./(sqrt(C11.*(C22+C33)+eps));
+b1 = (C22-C33)./((C22+C33+eps));
+b2 = 2*C23./((C22+C33+eps));
+
+%Exportar solo los coeficientes correspondientes a frecuencias positivas
+% Solo en frecuencias positivas hay información relevante, la parte
+% negativa es una reflexión respecto al eje y.
+coeffs = struct;
+coeffs.a1 = a1(W>0);
+coeffs.a1 = a2(W>0);
+coeffs.a1 = b1(W>0);
+coeffs.a1 = b2(W>0);
+W = W(W>0);             %Solo frecuencias positivas
+
+end
