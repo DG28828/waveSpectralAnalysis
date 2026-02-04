@@ -34,7 +34,7 @@ function [S, f, info] = wsa_spectrum(eta, fs, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 30/01/2026
-% Fecha de modificación: 30/01/2026
+% Fecha de modificación: 03/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

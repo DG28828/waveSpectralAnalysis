@@ -59,7 +59,7 @@ function [I, W, info] = wsa_psdwb(X, ventana, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 28/01/2026
-% Fecha de modificación: 30/01/2026
+% Fecha de modificación: 03/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
