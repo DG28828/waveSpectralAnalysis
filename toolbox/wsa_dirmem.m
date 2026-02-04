@@ -46,10 +46,6 @@ d4 = b2;
 C1 = d1 + 1i*d2;
 C2 = d3 + 1i*d4;
 
-if any(abs(C1).^2 + abs(C2).^2 >= 1)
-    warning('Coeficientes fuera del dominio de validez del MEM: |C1|^2+|C2|^2 >= 1');
-end
-
 phi1 = (C1 - conj(C1).*C2)./(1 - abs(C1).^2);
 phi2 = C2 - C1.*phi1;
 
@@ -67,16 +63,7 @@ D = num_D./(den_D);
 %    quedar números complejos muy pequeños debido al cálculo numérico.
 D = real(D);
 
-% % 2) Eliminar valores en que D es exactamente cero y cambiar por número muy
-% %    pequeño para evitar errores en la integración posterior.  
-% if any(D(:) == 0)
-%     D(D==0) = eps;
-% end
-
-% %Se debe normalizar por el número de direcciones de cálculo (verificar).
-% D = D./Ntheta;
-
-% 3) Normalizar la distribución, el área bajo la curva debe ser unitaria
+% 2) Normalizar la distribución, el área bajo la curva debe ser unitaria
 for k = 1:size(D, 1)
     D(k, :) = D(k, :)./trapz(theta, D(k, :));
 end
