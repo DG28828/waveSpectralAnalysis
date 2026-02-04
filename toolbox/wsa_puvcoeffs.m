@@ -66,7 +66,7 @@ Q13 = imag(Spv);
 %   Se suma "eps" a cada denominador, esto para evitar posibles problemas
 %   de división por 0 y así no obtener NaNs o Infs.
 a1 = Q12./(sqrt(C11.*(C22+C33))+eps);
-a2 = Q13./(sqrt(C11.*(C22+C33)+eps));
+a2 = Q13./(sqrt(C11.*(C22+C33))+eps);
 b1 = (C22-C33)./((C22+C33+eps));
 b2 = 2*C23./((C22+C33+eps));
 
@@ -75,9 +75,15 @@ b2 = 2*C23./((C22+C33+eps));
 % negativa es una reflexión respecto al eje y.
 coeffs = struct;
 coeffs.a1 = a1(W>0);
-coeffs.a1 = a2(W>0);
-coeffs.a1 = b1(W>0);
-coeffs.a1 = b2(W>0);
+coeffs.a2 = a2(W>0);
+coeffs.b1 = b1(W>0);
+coeffs.b2 = b2(W>0);
 W = W(W>0);             %Solo frecuencias positivas
+
+% coeffs = struct;
+% coeffs.a1 = a1;
+% coeffs.a2 = a2;
+% coeffs.b1 = b1;
+% coeffs.b2 = b2;
 
 end
