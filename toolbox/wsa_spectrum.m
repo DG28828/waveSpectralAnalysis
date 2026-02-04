@@ -88,8 +88,11 @@ Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 [I, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 
 %Convertir psd bilateral a espectro unilateral y convertir 
-% unidades de [unidad de eta]^2/rad/muestra a [unidad de eta]^2/rad/s *
-S = 2*I(W>=0)/fs;           
+% Conversión:
+%   PSD bilateral: [eta^2 / rad/muestra]
+%   PSD unilateral: [eta^2 / rad/s] = [eta^2 / Hz]
+S = I(W>=0)/fs;   
+S(2:end) = 2*S(2:end); %La componente DC (W=0) no se duplica
 f = fs*W(W>=0)/(2*pi);
 
 % *Esta conversión es la siguiente:
