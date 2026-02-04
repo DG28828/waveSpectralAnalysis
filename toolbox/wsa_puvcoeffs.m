@@ -65,12 +65,12 @@ K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 
 %Densidades espectrales cruzadas
-[Spp, W, info_Spp] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-[Suu, ~, info_Suu] = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-[Svv, ~, info_Svv] = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-[Spu, ~, info_Spu] = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-[Spv, ~, info_Spv] = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-[Suv, ~, info_Suv] = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Spp, W, info_Spp] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[Suu, ~, info_Suu] = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[Svv, ~, info_Svv] = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[Spu, ~, info_Spu] = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[Spv, ~, info_Spv] = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[Suv, ~, info_Suv] = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
 
 %Partes real y de interés de las densidades espectrales cruzadas
 %   Forma: Sxy = Cxy + i*Qxy
