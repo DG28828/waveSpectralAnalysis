@@ -59,21 +59,21 @@ pc     = p.Results.pc;
 %   the Motions of a Floating Buoy".
 
 %Parámetros para las densidades espectrales cruzadas
-% DoF = 16 por defecto;
+% Por defecto: DoF = 16 ;
 ventana = "hann";    
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 
 %Densidades espectrales cruzadas
-[Spp, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-Suu = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-Svv = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-Spu = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-Spv = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
-Suv = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Spp, W, info_Spp] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Suu, ~, info_Suu] = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Svv, ~, info_Svv] = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Spu, ~, info_Spu] = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Spv, ~, info_Spv] = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+[Suv, ~, info_Suv] = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
 
 %Partes real y de interés de las densidades espectrales cruzadas
-%   Sxy = Cxy + i*Qxy
+%   Forma: Sxy = Cxy + i*Qxy
 C11 = real(Spp);
 C22 = real(Suu);
 C33 = real(Svv);
@@ -99,10 +99,13 @@ coeffs.b1 = b1(W>0);
 coeffs.b2 = b2(W>0);
 W = W(W>0);             %Solo frecuencias positivas
 
-% coeffs = struct;
-% coeffs.a1 = a1;
-% coeffs.a2 = a2;
-% coeffs.b1 = b1;
-% coeffs.b2 = b2;
+% Información de cálculos
+info = struct;
+info.info_Spp = info_Spp;
+info.info_Suu = info_Suu;
+info.info_Svv = info_Svv;
+info.info_Spu = info_Spu;
+info.info_Spv = info_Spv;
+info.info_Suv = info_Suv;
 
 end
