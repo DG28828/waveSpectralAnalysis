@@ -47,7 +47,7 @@ C1 = d1 + 1i*d2;
 C2 = d3 + 1i*d4;
 
 if any(abs(C1).^2 + abs(C2).^2 >= 1)
-    warning('Coeficientes fuera del dominio de validez del MEM: |C1|^2+|C2| >= 1');
+    warning('Coeficientes fuera del dominio de validez del MEM: |C1|^2+|C2|^2 >= 1');
 end
 
 phi1 = (C1 - conj(C1).*C2)./(1 - abs(C1).^2);

@@ -1,4 +1,4 @@
-function [E, f, theta] = wsa_dirspectrum(eta, u, v, fs)
+function [E, f, theta] = wsa_dirspectrum(eta, u, v, fs, varargin)
 %wsa_dirmem - espectro de energía direccional
 %
 %   Esta función estima el espectro de energía direccional a partir de 
@@ -43,20 +43,43 @@ function [E, f, theta] = wsa_dirspectrum(eta, u, v, fs)
 % Fecha de modificación: 04/02/2026
 % -------------------------------------------------------------------------
 
+%% Manejo de entradas
+
+%Valores por defecto
+DoF_default = 16;
+pc_default = 0;
+
+%Input parser
+p = inputParser;
+
+addRequired(p, 'eta');
+addRequired(p, 'u');
+addRequired(p, 'v');
+addRequired(p, 'fs');
+
+addParameter(p, 'DoF', DoF_default);
+addParameter(p, 'pc',    pc_default);
+
+parse(p, eta, u, v, fs, varargin{:});
+
+%Resultados
+DoF    = p.Results.DoF;
+pc     = p.Results.pc;
+
 %%
 
 %Espectro frecuencial
-[S, f] = wsa_spectrum(eta, fs);
+[S, f, info_f] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
 
 %Coeficientes de la serie de Fourier
-coeffs = wsa_puvcoeffs(eta, u, v);
+coeffs = wsa_puvcoeffs(eta, u, v,'DoF', DoF, 'pc', pc);
 
 %Función de distribución direccional
 d1 = coeffs.a1;
 d2 = coeffs.a2;
 d3 = coeffs.b1;
 d4 = coeffs.b2;
-Ntheta = 360/2;
+Ntheta = 360;
 [D, theta] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
 
 % Espectro direccional
