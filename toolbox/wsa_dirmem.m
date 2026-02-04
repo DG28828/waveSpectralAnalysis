@@ -1,4 +1,4 @@
-function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta)
+function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %wsa_dirmem - método de máxima entropía para distribución direccional
 %
 %   Esta función emplea el método de máxima entropía (MEM) para determinar
@@ -32,7 +32,7 @@ function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/02/2026
-% Fecha de modificación: 03/02/2026
+% Fecha de modificación: 04/02/2026
 % -------------------------------------------------------------------------
 
 %% Cálculo de la distribución direccional
@@ -46,9 +46,9 @@ d4 = b2;
 C1 = d1 + 1i*d2;
 C2 = d3 + 1i*d4;
 
-% if any(abs(C1).^2 + abs(C2).^2 >= 1)
-%     warning('Coeficientes fuera del dominio de validez del MEM: |C1|^2+|C2| >= 1');
-% end
+if any(abs(C1).^2 + abs(C2).^2 >= 1)
+    warning('Coeficientes fuera del dominio de validez del MEM: |C1|^2+|C2| >= 1');
+end
 
 phi1 = (C1 - conj(C1).*C2)./(1 - abs(C1).^2);
 phi2 = C2 - C1.*phi1;
@@ -59,15 +59,24 @@ theta = linspace(0, 2*pi, Ntheta);
 %Se calcula la distribución direccional
 num_D = (1 - phi1.*conj(C1) - phi2.*conj(C2));
 den_D = ((2*pi).*abs(1 - phi1.*exp(-1i*theta) - phi2.*exp(-2*1i*theta) ).^2); 
-D = num_D./den_D;
+D = num_D./(den_D);
 
-% Operaciones finales sobre D
+%%%%%%%% Operaciones finales sobre D %%%%%%%%%
 
-%   Se debe tomar solo la parte real, D teóricamente es real, pero pueden
-%   quedar números complejos muy pequeños debido al cálculo numérico.
+% 1) Se debe tomar solo la parte real, D teóricamente es real, pero pueden
+%    quedar números complejos muy pequeños debido al cálculo numérico.
 D = real(D);
 
-%   Normalizar la distribución, el área bajo la curva debe ser unitaria
+% % 2) Eliminar valores en que D es exactamente cero y cambiar por número muy
+% %    pequeño para evitar errores en la integración posterior.  
+% if any(D(:) == 0)
+%     D(D==0) = eps;
+% end
+
+% %Se debe normalizar por el número de direcciones de cálculo (verificar).
+% D = D./Ntheta;
+
+% 3) Normalizar la distribución, el área bajo la curva debe ser unitaria
 for k = 1:size(D, 1)
     D(k, :) = D(k, :)./trapz(theta, D(k, :));
 end

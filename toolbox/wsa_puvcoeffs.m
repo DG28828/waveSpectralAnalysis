@@ -1,4 +1,4 @@
-function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v)
+function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v, varargin)
 %wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos PUV.
 %
 %   Esta función estima los primeros 4 coeficientes de la serie de Fourier
@@ -30,8 +30,27 @@ function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v)
 % Fecha de modificación: 03/02/2026
 % -------------------------------------------------------------------------
 
-%%
+%% Manejo de entradas
 
+%Valores por defecto
+DoF_default = 16;
+pc_default = 0;
+
+%Input parser
+p = inputParser;
+
+addRequired(p, 'eta');
+addRequired(p, 'u');
+addRequired(p, 'v');
+
+addParameter(p, 'DoF', DoF_default);
+addParameter(p, 'pc',    pc_default);
+
+parse(p, eta, u, v, varargin{:});
+
+%Resultados
+DoF    = p.Results.DoF;
+pc     = p.Results.pc;
 
 %% Cálculo de los coeficientes
 %   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
@@ -40,18 +59,18 @@ function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v)
 %   the Motions of a Floating Buoy".
 
 %Parámetros para las densidades espectrales cruzadas
-DoF = 16;
+% DoF = 16 por defecto;
 ventana = "hann";    
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 
 %Densidades espectrales cruzadas
-[Spp, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft);
-Suu = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft);
-Svv = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft);
-Spu = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft);
-Spv = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft);
-Suv = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft);
+[Spp, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+Suu = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+Svv = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+Spu = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+Spv = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
+Suv = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'K', K, 'pc', pc);
 
 %Partes real y de interés de las densidades espectrales cruzadas
 %   Sxy = Cxy + i*Qxy
