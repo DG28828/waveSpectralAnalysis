@@ -1,4 +1,4 @@
-function [S, f, info] = wsa_spectrum(eta, fs, varargin)
+function [out, info] = wsa_spectrum(eta, fs, varargin)
 %wsa_spectrum - espectro de energía.
 %
 %   Esta función estima el espectro de energía de un registro de mediciones 
@@ -23,10 +23,11 @@ function [S, f, info] = wsa_spectrum(eta, fs, varargin)
 %           bool | (opcional) Por defecto: 0
 %
 %   Argumentos de salida:
-%       S - estimador del espectro de energía unilateral [unidad de eta]^2/Hz
-%           vector
-%       f - frecuencias físicas Hz
-%           vector
+%       out - Salidas numéricas | struct
+%           S - estimador del espectro de energía unilateral [unidad de eta]^2/Hz
+%               vector
+%           f - frecuencias físicas Hz
+%               vector
 %       info - Información de parámetros finales del cálculo
 %           struct
 % -------------------------------------------------------------------------
@@ -85,8 +86,9 @@ end
 ventana = "hann";    
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
-[I, W, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-
+[out_pswb, info] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+I = out_pswb.I;
+W = out_pswb.W;
 %Convertir psd bilateral a espectro unilateral y convertir 
 % Conversión:
 %   PSD bilateral: [eta^2 / rad/muestra]
@@ -109,8 +111,15 @@ if pc
     fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n', m0, var_eta, error_relativo)
 end
 
+%Struct para resultados
+out = struct;
+out.S = S;
+out.f = f;
+
 %Agregar información adicional al struct de info
 info.fs = fs;
+info.var_eta = var_eta;  
+info.m0 = m0;
 info.error_relativo = error_relativo;
 
 end

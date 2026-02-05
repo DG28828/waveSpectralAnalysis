@@ -1,4 +1,4 @@
-function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
+function [out, info] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %wsa_dirmem - método de máxima entropía para distribución direccional
 %
 %   Esta función emplea el método de máxima entropía (MEM) para determinar
@@ -12,20 +12,21 @@ function [D, theta] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %
 %
 %   Argumentos de entrada:
-%       a1 - primeros coeficiente de la serie de Fourier (d1 de (Lygre & Krogstad, 1986)
+%       a1 - primer coeficiente de la serie de Fourier (d1 de (Lygre & Krogstad, 1986)
 %           vector
-%       a2 - segundos coeficiente de la serie de Fourier (d2 de (Lygre & Krogstad, 1986)
+%       a2 - segundo coeficiente de la serie de Fourier (d2 de (Lygre & Krogstad, 1986)
 %           vector
-%       b1 - terceros coeficiente de la serie de Fourier (d3 de (Lygre & Krogstad, 1986)
+%       b1 - tercer coeficiente de la serie de Fourier (d3 de (Lygre & Krogstad, 1986)
 %           vector
-%       b2 - cuartos coeficiente de la serie de Fourier (d4 de (Lygre & Krogstad, 1986)
+%       b2 - cuarto coeficiente de la serie de Fourier (d4 de (Lygre & Krogstad, 1986)
 %           vector
 %
 %   Argumentos de salida:
-%       D - Valores de distribución direccional [eta^2 / Hz / rad]
-%           vector
-%       theta - Angulos [rad]
-%           vector
+%       out - Salidas numéricas | struct
+%           D - Valores de distribución direccional [eta^2 / Hz / rad]
+%               vector
+%           theta - Angulos [rad]
+%               vector
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
@@ -62,10 +63,28 @@ D = num_D./(den_D);
 % 1) Se debe tomar solo la parte real, D teóricamente es real, pero pueden
 %    quedar números complejos muy pequeños debido al cálculo numérico.
 D = real(D);
+tol = 1e-12;
+D_is_pos = all(D(:) >= -tol); %Verificar que D es positivo (teoricamente debe cumplirse)
 
 % 2) Normalizar la distribución, el área bajo la curva debe ser unitaria
 for k = 1:size(D, 1)
     D(k, :) = D(k, :)./trapz(theta, D(k, :));
 end
+
+%Struct para resultados
+out = struct;
+out.D = D;
+out.theta = theta;
+
+% Otras salidas que podrían ser de interés
+out.mem_params.C1 = C1;
+out.mem_params.C2 = C2;
+out.mem_params.phi1 = phi1;
+out.mem_params.phi2 = phi2;
+
+% Información %Documentar esto!!
+info.D_is_pos = D_is_pos;
+info.min_D_value = min(D(:));
+
 
 end

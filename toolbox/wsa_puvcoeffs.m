@@ -1,4 +1,4 @@
-function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v, varargin)
+function [out, info] = wsa_puvcoeffs(eta, u, v, varargin)
 %wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos PUV.
 %
 %   Esta función estima los primeros 4 coeficientes de la serie de Fourier
@@ -18,8 +18,17 @@ function [coeffs, W, info] = wsa_puvcoeffs(eta, u, v, varargin)
 %           vector
 %
 %   Argumentos de salida:
-%       coeffs - coeficientes de la serie de Fourier (a1, a2, b1, b2)
-%           struct
+%       out - Salidas numéricas | struct
+%           a1 - primer coeficiente de la serie de Fourier
+%               vector
+%           a2 - segundo coeficiente de la serie de Fourier
+%               vector
+%           b1 - tercero coeficiente de la serie de Fourier
+%               vector
+%           b2 - cuarto coeficiente de la serie de Fourier
+%               vector
+%           W - Frecuencias angulares digitales (rad/muestra)
+%               vector
 %       info - Información de parámetros finales del cálculo
 %           struct
 % -------------------------------------------------------------------------
@@ -65,12 +74,18 @@ K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(eta)/(K+1)));
 
 %Densidades espectrales cruzadas
-[Spp, W, info_Spp] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[Suu, ~, info_Suu] = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[Svv, ~, info_Svv] = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[Spu, ~, info_Spu] = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[Spv, ~, info_Spv] = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[Suv, ~, info_Suv] = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Spp, info_Spp] = wsa_psdwb(eta, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Suu, info_Suu] = wsa_psdwb(u, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Svv, info_Svv] = wsa_psdwb(v, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Spu, info_Spu] = wsa_psdwb(eta, ventana,'Y',u, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Spv, info_Spv] = wsa_psdwb(eta, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Suv, info_Suv] = wsa_psdwb(u, ventana,'Y',v, 'K', K, 'Nfft', Nfft, 'pc', pc);
+Spp = out_Spp.I; W = out_Spp.W;
+Suu = out_Suu.I;
+Svv = out_Svv.I;
+Spu = out_Spu.I;
+Spv = out_Spv.I;
+Suv = out_Suv.I;
 
 %Partes real y de interés de las densidades espectrales cruzadas
 %   Forma: Sxy = Cxy + i*Qxy
@@ -92,12 +107,22 @@ b2 = 2*C23./((C22+C33+eps));
 %Exportar solo los coeficientes correspondientes a frecuencias positivas
 % Solo en frecuencias positivas hay información relevante, la parte
 % negativa es una reflexión respecto al eje y.
-coeffs = struct;
-coeffs.a1 = a1(W>0);
-coeffs.a2 = a2(W>0);
-coeffs.b1 = b1(W>0);
-coeffs.b2 = b2(W>0);
-W = W(W>0);             %Solo frecuencias positivas
+
+%Struct para resultados
+out = struct;
+out.a1 = a1(W>0);
+out.a2 = a2(W>0);
+out.b1 = b1(W>0);
+out.b2 = b2(W>0);
+out.W = W(W>0);             %Solo frecuencias positivas
+
+% Otras salidas que podrían ser de interés
+out.cross_spectra.Spp = Spp;
+out.cross_spectra.Suu = Suu;
+out.cross_spectra.Svv = Svv;
+out.cross_spectra.Spu = Spu;
+out.cross_spectra.Spv = Spv;
+out.cross_spectra.Suv = Suv;
 
 % Información de cálculos
 info = struct;

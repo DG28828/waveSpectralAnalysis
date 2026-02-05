@@ -1,4 +1,4 @@
-function [I, W, info] = wsa_psdwb(X, ventana, varargin)
+function [out, info] = wsa_psdwb(X, ventana, varargin)
 %wsa_psdwb - densidad espectral de potencia mediante el método de Welch-Barlett.
 %
 %   Esta función realiza la estimación de la densidad espectral de potencia 
@@ -47,10 +47,11 @@ function [I, W, info] = wsa_psdwb(X, ventana, varargin)
 %           bool | (opcional) Por defecto: 0
 %
 %   Argumentos de salida:
-%       I - Estimador del espectro de potencia por rad/muestra [unidad de X]^2/rad/muestra
-%           vector
-%       W - Frecuencias angulares digitales (rad/muestra)
-%           vector
+%       out - Salidas numéricas | struct
+%           I - Estimador del espectro de potencia por rad/muestra [unidad de X]^2/rad/muestra
+%               vector
+%           W - Frecuencias angulares digitales (rad/muestra)
+%               vector
 %       info - Información de parámetros finales del cálculo
 %           struct
 %
@@ -332,6 +333,11 @@ end
 
 I = I_acum./K;   % Periodograma promedio
 
+%Struct para resultados
+out = struct;
+out.I = I;
+out.W = W;
+
 %Guardar parámetros empleados
 info = struct;
 info.M = M;
@@ -341,3 +347,5 @@ info.K = K;
 info.Nfft = Nfft;
 info.DoF = 2*K;
 info.window = ventana;
+
+end

@@ -1,4 +1,4 @@
-function [E, f, theta, info] = wsa_dirspectrum(eta, u, v, fs, varargin)
+function [out, info] = wsa_dirspectrum(eta, u, v, fs, varargin)
 %wsa_dirmem - espectro de energía direccional
 %
 %   Esta función estima el espectro de energía direccional a partir de 
@@ -28,12 +28,13 @@ function [E, f, theta, info] = wsa_dirspectrum(eta, u, v, fs, varargin)
 %           entero
 %
 %   Argumentos de salida:
-%       E - Valores de energía ([unidades de eta]^2/Hz/°)
-%           vector
-%       f - frecuencias físicas (Hz)
-%           vector
-%       theta - Angulos (°)
-%           vector
+%       out - Salidas numéricas | struct
+%           E - Valores de energía ([unidades de eta]^2/Hz/°)
+%               vector
+%           f - frecuencias físicas (Hz)
+%               vector
+%           theta - Angulos (°)
+%               vector
 %       info - Información del cálculo
 %           struct
 %
@@ -79,18 +80,22 @@ pc     = p.Results.pc;
 %       Posteriormente, calcula E(f, theta) = S(f)*D(f, theta).
 
 %Espectro frecuencial
-[S, f, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
+[out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
+S = out_spectrum.S;
+f = out_spectrum.f;
 
 %Coeficientes de la serie de Fourier
-[coeffs, ~, info_puvcoeffs] = wsa_puvcoeffs(eta, u, v,'DoF', DoF, 'pc', pc);
+[out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(eta, u, v,'DoF', DoF, 'pc', pc);
+d1 = out_puvcoeffs.a1;
+d2 = out_puvcoeffs.a2;
+d3 = out_puvcoeffs.b1;
+d4 = out_puvcoeffs.b2;
 
 %Función de distribución direccional
-d1 = coeffs.a1;
-d2 = coeffs.a2;
-d3 = coeffs.b1;
-d4 = coeffs.b2;
 Ntheta = 360;
-[D, theta] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
+[out_dirmem, info_dirmem] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
+D = out_dirmem.D;
+theta = out_dirmem.theta;
 
 theta = theta*180/pi;   %Se convierte theta de [rad] a [°]
 D = D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
@@ -103,11 +108,23 @@ end
 
 f = f(1:end-1);
 
+%Struct para resultados
+out = struct;
+out.E = E;
+out.f = f;
+out.theta = theta;
+
+% Otras salidas que podrían ser de interés
+out.mem.D = out_dirmem.D;
+out.mem.mem_params = out_dirmem.mem_params;
+out.coeffs = out_puvcoeffs;
+out.coeffs.cross_spectra = out_puvcoeffs.cross_spectra;
 
 
 % Información
 info = struct;
 info.info_spectrum = info_spectrum;
 info.info_puvcoeffs = info_puvcoeffs;
+info.info_dirmem = info_dirmem;
 
 end
