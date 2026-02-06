@@ -23,7 +23,7 @@ function [out, info] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %
 %   Argumentos de salida:
 %       out - Salidas numéricas | struct
-%           D - Valores de distribución direccional [eta^2 / Hz / rad]
+%           D - Distribución direccional normalizada [1 / rad]
 %               vector
 %           theta - Angulos [rad]
 %               vector
@@ -51,7 +51,8 @@ phi1 = (C1 - conj(C1).*C2)./(1 - abs(C1).^2);
 phi2 = C2 - C1.*phi1;
 
 %Se crea vector de angulos
-theta = linspace(0, 2*pi, Ntheta);
+theta = linspace(0, 2*pi, Ntheta+1);
+theta(end) = []; %Excluir el ultimo dato porque 2pi = 0
 
 %Se calcula la distribución direccional
 num_D = (1 - phi1.*conj(C1) - phi2.*conj(C2));
