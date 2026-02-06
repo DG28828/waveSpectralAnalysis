@@ -1,4 +1,4 @@
-function [out, info] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
+function [out, info] = wsa_dirmem(a1, b1, a2, b2, Ntheta, varargin)
 %wsa_dirmem - método de máxima entropía para distribución direccional
 %
 %   Esta función emplea el método de máxima entropía (MEM) para determinar
@@ -14,9 +14,9 @@ function [out, info] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %   Argumentos de entrada:
 %       a1 - primer coeficiente de la serie de Fourier (d1 de (Lygre & Krogstad, 1986)
 %           vector
-%       a2 - segundo coeficiente de la serie de Fourier (d2 de (Lygre & Krogstad, 1986)
+%       b1 - segundo coeficiente de la serie de Fourier (d2 de (Lygre & Krogstad, 1986)
 %           vector
-%       b1 - tercer coeficiente de la serie de Fourier (d3 de (Lygre & Krogstad, 1986)
+%       a2 - tercer coeficiente de la serie de Fourier (d3 de (Lygre & Krogstad, 1986)
 %           vector
 %       b2 - cuarto coeficiente de la serie de Fourier (d4 de (Lygre & Krogstad, 1986)
 %           vector
@@ -40,8 +40,8 @@ function [out, info] = wsa_dirmem(a1, a2, b1, b2, Ntheta, varargin)
 %   Se emplea la misma notación que en (Lygre & Krogstad, 1986).
 
 d1 = a1;
-d2 = a2;
-d3 = b1;
+d2 = b1;
+d3 = a2;
 d4 = b2;
 
 C1 = d1 + 1i*d2;

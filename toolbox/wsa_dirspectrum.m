@@ -87,8 +87,8 @@ f = out_spectrum.f;
 %Coeficientes de la serie de Fourier
 [out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(eta, u, v,'DoF', DoF, 'pc', pc);
 d1 = out_puvcoeffs.a1;
-d2 = out_puvcoeffs.a2;
-d3 = out_puvcoeffs.b1;
+d2 = out_puvcoeffs.b1;
+d3 = out_puvcoeffs.a2;
 d4 = out_puvcoeffs.b2;
 
 %Función de distribución direccional
