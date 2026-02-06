@@ -106,23 +106,33 @@ for i = 1:length(S(1:end-1))
     E(i, :) = S(i).*D(i, :);
 end
 
+%Vector de frecuencias
 f = f(1:end-1);
+
+%Verificación energética (área bajo la curva del espectro direccional)
+S_i = zeros(size(E, 1), 1);
+for k = 1:size(E, 1)
+    S_i(k) = trapz(theta, E(k, :));
+end
+m0 = trapz(f, S_i);
 
 %Struct para resultados
 out = struct;
-out.E = E;
 out.f = f;
 out.theta = theta;
+out.E = E;
 
 % Otras salidas que podrían ser de interés
-out.mem.D = out_dirmem.D;
-out.mem.mem_params = out_dirmem.mem_params;
+out.S = out_spectrum.S(1:end-1);
+out.D = out_dirmem.D;
+out.mem = out_dirmem.mem_params;
+out.mem.f = f;
 out.coeffs = out_puvcoeffs;
 out.coeffs.cross_spectra = out_puvcoeffs.cross_spectra;
 
-
 % Información
 info = struct;
+info.m0 = m0;
 info.info_spectrum = info_spectrum;
 info.info_puvcoeffs = info_puvcoeffs;
 info.info_dirmem = info_dirmem;
