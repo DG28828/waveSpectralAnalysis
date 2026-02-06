@@ -110,13 +110,14 @@ b2 = 2*C23./((C22+C33+eps));
 
 %Struct para resultados
 out = struct;
+out.W = W(W>0);             %Solo frecuencias positivas
 out.a1 = a1(W>0);
 out.a2 = a2(W>0);
 out.b1 = b1(W>0);
 out.b2 = b2(W>0);
-out.W = W(W>0);             %Solo frecuencias positivas
 
 % Otras salidas que podrían ser de interés
+out.cross_spectra.W = W;
 out.cross_spectra.Spp = Spp;
 out.cross_spectra.Suu = Suu;
 out.cross_spectra.Svv = Svv;
