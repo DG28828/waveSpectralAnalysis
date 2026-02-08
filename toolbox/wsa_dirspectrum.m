@@ -92,7 +92,7 @@ d3 = out_puvcoeffs.a2;
 d4 = out_puvcoeffs.b2;
 
 %Función de distribución direccional
-Ntheta = 360;
+Ntheta = 180;
 [out_dirmem, info_dirmem] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
 D = out_dirmem.D;
 theta = out_dirmem.theta;
