@@ -50,6 +50,8 @@ g_default = 9.81;   %m's^2
 rho_default = 1000; %kg/m^3
 DoF_default = 16;
 pc_default = 0;
+Kp_min_default = 0.2;
+
 
 %Input parser
 p = inputParser;
@@ -63,6 +65,7 @@ addParameter(p, 'g', g_default);
 addParameter(p, 'rho',    rho_default);
 addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
+addParameter(p, 'Kp_min',    Kp_min_default);
 
 parse(p, P, un, fs, hm, varargin{:});
 
@@ -71,6 +74,7 @@ g    = p.Results.g;
 rho     = p.Results.rho;
 DoF    = p.Results.DoF;
 pc     = p.Results.pc;
+Kp_min = p.Results.Kp_min;
 
 %% Verificaciones iniciales
 
@@ -91,7 +95,8 @@ end
 %% Conversión de unidades
 %Si las unidades son dBa, se convierte a metros de columna de agua 
 switch lower(string(un))
-    case "dBa"
+    case "dba"
+        P = 10000*P; %1dBa = 10kPa (Primero se pasa a unidades SI)
         P = P./(rho*g); 
     case "m"
     otherwise
@@ -156,18 +161,48 @@ end
 %
 %   Nota: Kp es dependiente de omega
 
-h = mean(P) + hm; %Profundidad del fondo marino estimada a partir de la medición de presión.
+h = P_mean + hm; %Profundidad del fondo marino estimada a partir de la medición de presión.
 
+% Calculo del número de onda k para cada frecuencia f, para esto se emplea
+% un método númerico para resolver la ecuación de dispersión, en este caso
+% se ecogió el método de punto fijo.
+%
+%   omega^2 = g*k*tanh(k*h)
+%
+%   Si x = k*h, entonces k = h/x, por lo tanto, 
+%
+%   omega^2 = (g*x/h)*tanh(x)
+%
+%   Entonces, f(x) = a*(1/tanh(x)) con a = (omega^2)*h/g
 
+%Estimación de k para cada frecuencia f
+k = zeros(size(f));
+x0 = 0.2;
+tol = 1e-5;
+iterMax = 1000;
+for i = 1:length(f)
+    omega_i = 2*pi*f(i);
+    a = (omega_i^2)*(h/g);
+    func = @(x) a*(1/tanh(x));
+    x = wsa_fixedpoint(func, x0, tol, iterMax);     %Estimación de k*h por punto fijo 
+    k(i) = x/h;
+end
 
+L = 2*pi./k;figure;plot(f, k); title('k');figure; plot(f, L);title('L')
 
+Kp = cosh(k.*hm)./cosh(k.*h); Kp(1) = 1;
+Kp(Kp<Kp_min) = Kp_min;         %Aplicar umbral de Kp. 
+figure; plot(f, Kp);title('Kp')
+S_corr = S./(Kp.^2);
 
 
 %% Guardado de resultados
 %Struct para resultados
 out = struct;
-out.S = S;
+out.Scorr = S_corr;
 out.f = f;
+out.S = S;
+out.Kp = Kp;
 
 %Agregar información adicional al struct de info
 info.fs = fs;
