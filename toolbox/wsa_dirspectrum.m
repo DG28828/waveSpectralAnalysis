@@ -1,4 +1,4 @@
-function [out, info] = wsa_dirspectrum(eta, u, v, fs, varargin)
+function [out, info] = wsa_dirspectrum(z, x, y, fs, method, varargin)
 %wsa_dirmem - espectro de energía direccional
 %
 %   Esta función estima el espectro de energía direccional a partir de 
@@ -52,40 +52,130 @@ function [out, info] = wsa_dirspectrum(eta, u, v, fs, varargin)
 DoF_default = 16;
 pc_default = 0;
 
+% Valores por defecto de parámetros opcionales requeridos en caso de method = 'PUV'
+un_default = [];
+hm_default = [];
+h_default = [];
+
+% Valores por defecto de parámetros opcionales, no requeridos en caso de method = 'PUV'
+g_default = 9.81;   %m's^2
+rho_default = 1025; %kg/m^3
+Kp_min_default = 0.2;
+
 %Input parser
 p = inputParser;
 
-addRequired(p, 'eta');
-addRequired(p, 'u');
-addRequired(p, 'v');
+%%%%%% Parámetros requeridos %%%%%%
+addRequired(p, 'z');
+addRequired(p, 'x');
+addRequired(p, 'y');
 addRequired(p, 'fs');
+addRequired(p, 'method');
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%% Parámetros opcionales %%%%%%
+
+% Parámetros opcionales
 addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 
-parse(p, eta, u, v, fs, varargin{:});
+%Parámetros opcionales requeridos en caso de method = 'PUV'
+addParameter(p, 'un', un_default)
+addParameter(p, 'hm', hm_default)
+addParameter(p, 'h', h_default)
+
+% Parámetros opcionales, no requeridos en caso de method = 'PUV'
+addParameter(p, 'g', g_default);
+addParameter(p, 'rho',    rho_default);
+addParameter(p, 'Kp_min',    Kp_min_default);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+parse(p, z, x, y, fs, method, varargin{:});
+
+%%%%%%%    Resultados     %%%%%%%%
 
 %Resultados
 DoF    = p.Results.DoF;
 pc     = p.Results.pc;
 
+%Parámetros opcionales requeridos en caso de method = 'PUV'
+un      = p.Results.un;
+hm      = p.Results.hm;
+h      = p.Results.h;
+
+%Resultados de parámetros opcionales, no requeridos en caso de method = 'PUV'
+g    = p.Results.g;
+rho     = p.Results.rho;
+Kp_min = p.Results.Kp_min;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Verificaciones iniciales
+
+if lower(string(method)) == "puv"
+    if isempty(un) || isempty(hm) || isempty(h)
+        error('El método PUV requiere de los siguientes parámetros:\n\t un: unidad de presión  "dba" o "m" \n\t\t string | char \n\t hm: altura del equipo de medición respecto al fondo marino [m]. \n\t\t entero (positivo)\n\t h: profundidad del fondo marino [m]. \n\t\t entero (positivo)\n %s', '');
+    end
+
+    if ~ischar(un) && ~isstring(un)
+        error('El parámetro "un" debe ser string o char ("dba" o "m").')
+    end
+
+    if ~ismember(lower(string(un)), ["dba","m"])
+        error('El parámetro "un" debe ser "dba" o "m".')
+    end
+
+    if ~isscalar(hm) || hm <= 0
+        error('El parámetro "hm" debe ser un escalar positivo.')
+    end
+
+    if ~isscalar(h) || h <= 0
+        error('El parámetro "h" debe ser un escalar positivo.')
+    end
+end
+
 %% Cálculo del espectro direccional
 %   Esta función llama a las siguientes funciones:
+%       - wsa_pspectrum: calcula el espectro frecuencial S(f) a partir de p
 %       - wsa_spectrum: calcula el espectro frecuencial S(f) a partir de eta
 %       - wsa_puvcoeffs: calcula los coeficientes de la serie de Fourier a1,
-%                       a2, b1, b2 a partir de eta, u y v.
+%                       a2, b1, b2 a partir de p, u y v (medidas en el fondo).
+%       - wsa_hprcoeffs: calcula los coeficientes de la serie de Fourier a1,
+%                       a2, b1, b2 a partir de heave-pitch-roll (boya en superficie).
 %       - wsa_dirmem: estima la distribución direccional D(f, theta) a partir
 %                       de los coeficientes de la serie de Fourier.
 %
 %       Posteriormente, calcula E(f, theta) = S(f)*D(f, theta).
 
+% Cálculo de S(f) y coeficientes de Fourier según método
+switch lower(string(method))
+    case "puv"
+        P = z;
+        U = x;
+        V = y;
+        [out_spectrum, info_spectrum] = wsa_pspectrum(P, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+        [out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(P, U, V, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+    case "suv"
+        S = z;
+        U = x;
+        V = y;
+        [out_spectrum, info_spectrum] = wsa_spectrum(S, fs, 'DoF', DoF, 'pc', pc);
+        [out_puvcoeffs, info_puvcoeffs] = wsa_hprcoeffs(S, U, V,'DoF', DoF, 'pc', pc);
+    case "hpr"
+        eta = z;
+        d_eta_x = x;
+        d_eta_y = y;
+        [out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
+        [out_puvcoeffs, info_puvcoeffs] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y,'DoF', DoF, 'pc', pc);
+    otherwise
+        error('Debe especificar alguno de los siguientes métodos: "PUV", "SUV", "HPR"')
+end
+
 %Espectro frecuencial
-[out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
 S = out_spectrum.S;
 f = out_spectrum.f;
 
 %Coeficientes de la serie de Fourier
-[out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(eta, u, v,'DoF', DoF, 'pc', pc);
 d1 = out_puvcoeffs.a1;
 d2 = out_puvcoeffs.b1;
 d3 = out_puvcoeffs.a2;
