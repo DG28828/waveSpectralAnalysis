@@ -1,4 +1,4 @@
-function [out, info] = wsa_pspectrum(P, un, fs, hm, varargin)
+function [out, info] = wsa_pspectrum(P, un, fs, hm, h, varargin)
 %wsa_spectrum - espectro de energía a partir de registro de presión
 %
 %   Esta función estima el espectro de energía de una secuencia de 
@@ -19,6 +19,8 @@ function [out, info] = wsa_pspectrum(P, un, fs, hm, varargin)
 %       fs - frecuencia de muestreo (Hz)
 %           entero
 %       hm - altura del equipo de medición respecto al fondo marino [m].
+%           entero (positivo)
+%       h - profundidad del fondo marino [m].
 %           entero (positivo)
 %       DoF - grados de libertad (Degrees of Freedom) del espectro. Debe
 %       ser entero, par, mayor o igual a 2.
@@ -47,7 +49,7 @@ function [out, info] = wsa_pspectrum(P, un, fs, hm, varargin)
 
 %Valores por defecto
 g_default = 9.81;   %m's^2
-rho_default = 1000; %kg/m^3
+rho_default = 1025; %kg/m^3
 DoF_default = 16;
 pc_default = 0;
 Kp_min_default = 0.2;
@@ -60,6 +62,7 @@ addRequired(p, 'P');
 addRequired(p, 'un');
 addRequired(p, 'fs');
 addRequired(p, 'hm');
+addRequired(p, 'h');
 
 addParameter(p, 'g', g_default);
 addParameter(p, 'rho',    rho_default);
@@ -67,7 +70,7 @@ addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
 
-parse(p, P, un, fs, hm, varargin{:});
+parse(p, P, un, fs, hm, h, varargin{:});
 
 %Resultados
 g    = p.Results.g;
@@ -108,8 +111,7 @@ end
 %   corresponda únicamente a la presión dinámica. Para esto se resta el
 %   nivel medio de la señal de presión y se eliminan tendencias o señales
 %   de muy baja frecuencia.
-P_mean = mean(P);
-P = detrend(P-P_mean);
+P = detrend(P-mean(P));
 
 %% Calculo del espectro de energía
 % Se calcula el espectro de energía unilateral a partir de la estimación de
@@ -126,15 +128,15 @@ ventana = "hann";
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(P)/(K+1)));
 [out_pswb, info] = wsa_psdwb(P, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-Spp = out_pswb.I;
+Ipp = out_pswb.I;
 W = out_pswb.W;
 
 %Convertir psd bilateral a espectro unilateral y convertir 
 % Conversión:
 %   PSD bilateral: [X^2 / rad/muestra]
 %   PSD unilateral: [X^2 / rad/s] = [eta^2 / Hz]
-S = Spp(W>=0)/fs;   
-S(2:end) = 2*S(2:end); %La componente DC (W=0) no se duplica
+Spp = Ipp(W>=0)/fs;   
+Spp(2:end) = 2*Spp(2:end); %La componente DC (W=0) no se duplica
 f = fs*W(W>=0)/(2*pi);
 
 % *Esta conversión es la siguiente:
@@ -144,7 +146,7 @@ f = fs*W(W>=0)/(2*pi);
 
 %Validación energética:
 %   Se verifica el cumplimiento de integral_0_inf(S(f)df) = varianza
-m0 = trapz(f, S);       %El momento de primer orden es el área bajo la curva
+m0 = trapz(f, Spp);       %El momento de primer orden es el área bajo la curva
 varianza = var(P);     %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
 if pc
@@ -161,48 +163,25 @@ end
 %
 %   Nota: Kp es dependiente de omega
 
-h = P_mean + hm; %Profundidad del fondo marino estimada a partir de la medición de presión.
-
 % Calculo del número de onda k para cada frecuencia f, para esto se emplea
-% un método númerico para resolver la ecuación de dispersión, en este caso
-% se ecogió el método de punto fijo.
-%
-%   omega^2 = g*k*tanh(k*h)
-%
-%   Si x = k*h, entonces k = h/x, por lo tanto, 
-%
-%   omega^2 = (g*x/h)*tanh(x)
-%
-%   Entonces, f(x) = a*(1/tanh(x)) con a = (omega^2)*h/g
+% un método númerico para resolver la ecuación de dispersión. Se emplea la
+% función wsa_k que calcula k(f) mediante el método de NewtonRaphson.
 
-%Estimación de k para cada frecuencia f
-k = zeros(size(f));
-x0 = 0.2;
-tol = 1e-5;
-iterMax = 1000;
-for i = 1:length(f)
-    omega_i = 2*pi*f(i);
-    a = (omega_i^2)*(h/g);
-    func = @(x) a*(1/tanh(x));
-    x = wsa_fixedpoint(func, x0, tol, iterMax);     %Estimación de k*h por punto fijo 
-    k(i) = x/h;
-end
+k = wsa_k(f, h, g);
 
-L = 2*pi./k;figure;plot(f, k); title('k');figure; plot(f, L);title('L')
-
-Kp = cosh(k.*hm)./cosh(k.*h); Kp(1) = 1;
+Kp = cosh(k.*hm)./cosh(k.*h);
 Kp(Kp<Kp_min) = Kp_min;         %Aplicar umbral de Kp. 
-figure; plot(f, Kp);title('Kp')
-S_corr = S./(Kp.^2);
+S = Spp./(Kp.^2);
 
 
 %% Guardado de resultados
 %Struct para resultados
 out = struct;
-out.Scorr = S_corr;
-out.f = f;
 out.S = S;
+out.f = f;
+out.Spp = Spp;
 out.Kp = Kp;
+out.k = k;
 
 %Agregar información adicional al struct de info
 info.fs = fs;
