@@ -4,25 +4,12 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 %   Esta función realiza la estimación de la densidad espectral de potencia 
 %   de X mediante el método de Welch-Barlett.
 %   Si se especifica Y, se calcula la densidad espectral de potencia cruzada 
-%   de X e Y.
+%   de X e Y. La convención empleada para la densidad espectral de potencia
+%   cruzada es la dada por (Ochi, 1998) denotada como Ixy = X*[k]Y[k].
+%                           
 %
 %   Sintaxis:
-%       I = wsa_psdwb(X, ventana)
-%       I = wsa_psdwb(X, ventana, 'Y', Y)
-%       I = wsa_psdwb(X, ventana, 'N', N)
-%       I = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
-%       I = wsa_psdwb(X, ventana, 'K', 'Nfft')
-%       I = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
-%       I = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
-%
-%       [I, W, info] = wsa_psdwb(X, ventana)
-%       [I, W, info] = wsa_psdwb(X, ventana, 'Y', Y)
-%       [I, W, info] = wsa_psdwb(X, ventana, 'N', N)
-%       [I, W, info] = wsa_psdwb(X, ventana, 'N', N, 'N0', N0)
-%       [I, W, info] = wsa_psdwb(X, ventana, 'K', 'Nfft')
-%       [I, W, info] = wsa_psdwb(X, ventana, 'K', K, 'N0', N0)
-%       [I, W, info] = wsa_psdwb(X, ventana, 'K', K, 'N', N, 'N0', N0, 'Nfft', Nfft, 'Y', Y, 'pc', 1)
 %
 %   Argumentos de entrada:
 %       X - Arreglo de entrada X 
@@ -325,7 +312,7 @@ else
         [H_x_r, W] = wsa_dft(x_r, Nfft);
         [H_y_r, ~] = wsa_dft(y_r, Nfft);
     
-        I_xy_n = (1/(N*U))*H_x_r.*conj(H_y_r);
+        I_xy_n = (1/(N*U))*conj(H_x_r).*H_y_r;
        
         I_acum = I_acum + I_xy_n;
     end
