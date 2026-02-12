@@ -156,11 +156,11 @@ switch lower(string(method))
         [out_spectrum, info_spectrum] = wsa_pspectrum(P, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
         [out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(P, U, V, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
     case "suv"
-        S = z;
+        S = z; S = detrend(S-mean(S));
         U = x;
         V = y;
         [out_spectrum, info_spectrum] = wsa_spectrum(S, fs, 'DoF', DoF, 'pc', pc);
-        [out_puvcoeffs, info_puvcoeffs] = wsa_hprcoeffs(S, U, V,'DoF', DoF, 'pc', pc);
+        [out_puvcoeffs, info_puvcoeffs] = wsa_suvcoeffs(S, U, V,'DoF', DoF, 'pc', pc);
     case "hpr"
         eta = z;
         d_eta_x = x;
