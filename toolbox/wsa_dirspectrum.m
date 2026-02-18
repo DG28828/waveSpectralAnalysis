@@ -1,4 +1,4 @@
-function [out, info] = wsa_dirspectrum(z, x, y, fs, method, varargin)
+function [out, info] = wsa_dirspectrum(Z, X, Y, fs, method, varargin)
 %wsa_dirmem - espectro de energía direccional
 %
 %   Esta función estima el espectro de energía direccional a partir de 
@@ -56,6 +56,7 @@ pc_default = 0;
 un_default = [];
 hm_default = [];
 h_default = [];
+z_default = [];
 
 % Valores por defecto de parámetros opcionales, no requeridos en caso de method = 'PUV'
 g_default = 9.81;   %m's^2
@@ -66,9 +67,9 @@ Kp_min_default = 0.2;
 p = inputParser;
 
 %%%%%% Parámetros requeridos %%%%%%
-addRequired(p, 'z');
-addRequired(p, 'x');
-addRequired(p, 'y');
+addRequired(p, 'Z');
+addRequired(p, 'X');
+addRequired(p, 'Y');
 addRequired(p, 'fs');
 addRequired(p, 'method');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -83,6 +84,7 @@ addParameter(p, 'pc',    pc_default);
 addParameter(p, 'un', un_default)
 addParameter(p, 'hm', hm_default)
 addParameter(p, 'h', h_default)
+addParameter(p, 'z_Kc', z_default)
 
 % Parámetros opcionales, no requeridos en caso de method = 'PUV'
 addParameter(p, 'g', g_default);
@@ -90,7 +92,7 @@ addParameter(p, 'rho',    rho_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-parse(p, z, x, y, fs, method, varargin{:});
+parse(p, Z, X, Y, fs, method, varargin{:});
 
 %%%%%%%    Resultados     %%%%%%%%
 
@@ -101,7 +103,8 @@ pc     = p.Results.pc;
 %Parámetros opcionales requeridos en caso de method = 'PUV'
 un      = p.Results.un;
 hm      = p.Results.hm;
-h      = p.Results.h;
+h       = p.Results.h;
+z       = p.Results.z_Kc;
 
 %Resultados de parámetros opcionales, no requeridos en caso de method = 'PUV'
 g    = p.Results.g;
@@ -112,8 +115,10 @@ Kp_min = p.Results.Kp_min;
 
 %% Verificaciones iniciales
 
+% Agreagr verificacion para z, debe ser negativo y mayor a -h.
+
 if lower(string(method)) == "puv"
-    if isempty(un) || isempty(hm) || isempty(h)
+    if isempty(un) || isempty(hm) || isempty(h) || isempty(Z)
         error('El método PUV requiere de los siguientes parámetros:\n\t un: unidad de presión  "dba" o "m" \n\t\t string | char \n\t hm: altura del equipo de medición respecto al fondo marino [m]. \n\t\t entero (positivo)\n\t h: profundidad del fondo marino [m]. \n\t\t entero (positivo)\n %s', '');
     end
 
@@ -150,21 +155,21 @@ end
 % Cálculo de S(f) y coeficientes de Fourier según método
 switch lower(string(method))
     case "puv"
-        P = z;
-        U = x;
-        V = y;
+        P = Z;
+        U = X;
+        V = Y;
         [out_spectrum, info_spectrum] = wsa_pspectrum(P, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
         [out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(P, U, V, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
     case "suv"
-        S = z; S = detrend(S-mean(S));
-        U = x;
-        V = y;
+        S = Z; S = detrend(S-mean(S));
+        U = X;
+        V = Y;
         [out_spectrum, info_spectrum] = wsa_spectrum(S, fs, 'DoF', DoF, 'pc', pc);
-        [out_puvcoeffs, info_puvcoeffs] = wsa_suvcoeffs(S, U, V,'DoF', DoF, 'pc', pc);
+        [out_puvcoeffs, info_puvcoeffs] = wsa_suvcoeffs(S, U, V, fs, z, h, 'DoF', DoF, 'pc', pc);
     case "hpr"
-        eta = z;
-        d_eta_x = x;
-        d_eta_y = y;
+        eta = Z;
+        d_eta_x = X;
+        d_eta_y = Y;
         [out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
         [out_puvcoeffs, info_puvcoeffs] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y,'DoF', DoF, 'pc', pc);
     otherwise
