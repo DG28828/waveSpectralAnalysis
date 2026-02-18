@@ -84,7 +84,8 @@ addParameter(p, 'pc',    pc_default);
 addParameter(p, 'un', un_default)
 addParameter(p, 'hm', hm_default)
 addParameter(p, 'h', h_default)
-addParameter(p, 'z_Kc', z_default)
+addParameter(p, 'z_p', z_default)
+addParameter(p, 'z_v', z_default)
 
 % Parámetros opcionales, no requeridos en caso de method = 'PUV'
 addParameter(p, 'g', g_default);
@@ -104,7 +105,8 @@ pc     = p.Results.pc;
 un      = p.Results.un;
 hm      = p.Results.hm;
 h       = p.Results.h;
-z       = p.Results.z_Kc;
+z_p       = p.Results.z_p;
+z_v       = p.Results.z_v;
 
 %Resultados de parámetros opcionales, no requeridos en caso de method = 'PUV'
 g    = p.Results.g;
@@ -118,7 +120,7 @@ Kp_min = p.Results.Kp_min;
 % Agreagr verificacion para z, debe ser negativo y mayor a -h.
 
 if lower(string(method)) == "puv"
-    if isempty(un) || isempty(hm) || isempty(h) || isempty(Z)
+    if isempty(un) || isempty(z_p) || isempty(z_v) || isempty(h)
         error('El método PUV requiere de los siguientes parámetros:\n\t un: unidad de presión  "dba" o "m" \n\t\t string | char \n\t hm: altura del equipo de medición respecto al fondo marino [m]. \n\t\t entero (positivo)\n\t h: profundidad del fondo marino [m]. \n\t\t entero (positivo)\n %s', '');
     end
 
@@ -128,10 +130,6 @@ if lower(string(method)) == "puv"
 
     if ~ismember(lower(string(un)), ["dba","m"])
         error('El parámetro "un" debe ser "dba" o "m".')
-    end
-
-    if ~isscalar(hm) || hm <= 0
-        error('El parámetro "hm" debe ser un escalar positivo.')
     end
 
     if ~isscalar(h) || h <= 0
@@ -158,20 +156,20 @@ switch lower(string(method))
         P = Z;
         U = X;
         V = Y;
-        [out_spectrum, info_spectrum] = wsa_pspectrum(P, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
-        [out_puvcoeffs, info_puvcoeffs] = wsa_puvcoeffs(P, U, V, un, fs, hm, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+        [out_spectrum, info_spectrum] = wsa_pspectrum(P, fs, un, z_p, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+        [out_coeffs, info_coeffs] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
     case "suv"
         S = Z; S = detrend(S-mean(S));
         U = X;
         V = Y;
         [out_spectrum, info_spectrum] = wsa_spectrum(S, fs, 'DoF', DoF, 'pc', pc);
-        [out_puvcoeffs, info_puvcoeffs] = wsa_suvcoeffs(S, U, V, fs, z, h, 'DoF', DoF, 'pc', pc);
+        [out_coeffs, info_coeffs] = wsa_suvcoeffs(S, U, V, fs, z_v, h, 'DoF', DoF, 'pc', pc);
     case "hpr"
         eta = Z;
         d_eta_x = X;
         d_eta_y = Y;
         [out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
-        [out_puvcoeffs, info_puvcoeffs] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y,'DoF', DoF, 'pc', pc);
+        [out_coeffs, info_coeffs] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y,'DoF', DoF, 'pc', pc);
     otherwise
         error('Debe especificar alguno de los siguientes métodos: "PUV", "SUV", "HPR"')
 end
@@ -181,10 +179,10 @@ S = out_spectrum.S;
 f = out_spectrum.f;
 
 %Coeficientes de la serie de Fourier
-d1 = out_puvcoeffs.a1;
-d2 = out_puvcoeffs.b1;
-d3 = out_puvcoeffs.a2;
-d4 = out_puvcoeffs.b2;
+d1 = out_coeffs.a1;
+d2 = out_coeffs.b1;
+d3 = out_coeffs.a2;
+d4 = out_coeffs.b2;
 
 %Función de distribución direccional
 Ntheta = 180;
@@ -222,14 +220,14 @@ out.S = out_spectrum.S(1:end-1);
 out.D = out_dirmem.D;
 out.mem = out_dirmem.mem_params;
 out.mem.f = f;
-out.coeffs = out_puvcoeffs;
-out.coeffs.cross_spectra = out_puvcoeffs.cross_spectra;
+out.coeffs = out_coeffs;
+out.coeffs.cross_spectra = out_coeffs.cross_spectra;
 
 % Información
 info = struct;
 info.m0 = m0;
 info.info_spectrum = info_spectrum;
-info.info_puvcoeffs = info_puvcoeffs;
+info.info_puvcoeffs = info_coeffs;
 info.info_dirmem = info_dirmem;
 
 end

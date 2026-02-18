@@ -1,4 +1,4 @@
-function [out, info] = wsa_pspectrum(P, un, fs, hm, h, varargin)
+function [out, info] = wsa_pspectrum(P, fs, un, z_p, h, varargin)
 %wsa_spectrum - espectro de energía a partir de registro de presión
 %
 %   Esta función estima el espectro de energía de una secuencia de 
@@ -61,7 +61,7 @@ p = inputParser;
 addRequired(p, 'P');
 addRequired(p, 'un');
 addRequired(p, 'fs');
-addRequired(p, 'hm');
+addRequired(p, 'z_p');
 addRequired(p, 'h');
 
 addParameter(p, 'g', g_default);
@@ -70,7 +70,7 @@ addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
 
-parse(p, P, un, fs, hm, h, varargin{:});
+parse(p, P, fs, un, z_p, h, varargin{:});
 
 %Resultados
 g    = p.Results.g;
@@ -169,7 +169,7 @@ end
 
 k = wsa_k(f, h, g);
 
-Kp = cosh(k.*hm)./cosh(k.*h);
+Kp = cosh(k.*(z_p+h))./cosh(k.*h);
 Kp(Kp<Kp_min) = Kp_min;         %Aplicar umbral de Kp. 
 S = Spp./(Kp.^2);
 

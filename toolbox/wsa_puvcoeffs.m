@@ -1,4 +1,4 @@
-function [out, info] = wsa_puvcoeffs(P, U, V, un, fs, hm, h, varargin)
+function [out, info] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h, varargin)
 %wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos PUV.
 %
 %   Esta función estima los primeros 4 coeficientes de la serie de Fourier
@@ -64,7 +64,8 @@ addRequired(p, 'U');
 addRequired(p, 'V');
 addRequired(p, 'un');
 addRequired(p, 'fs');
-addRequired(p, 'hm');
+addRequired(p, 'z_p');
+addRequired(p, 'z_v');
 addRequired(p, 'h');
 
 addParameter(p, 'g', g_default);
@@ -73,7 +74,7 @@ addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
 
-parse(p, P, U, V, un, fs, hm, h, varargin{:});
+parse(p, P, U, V, fs, un, z_p, z_v, h, varargin{:});
 
 %Resultados
 g    = p.Results.g;
@@ -132,12 +133,13 @@ Suv = out_Suv.I;
 f = fs*W/(2*pi);
 k = wsa_k(f, h, g);
 
-Kp = cosh(k.*hm)./cosh(k.*h);
+Kp = cosh(k.*(z_p+h))./cosh(k.*h);
 Kp(Kp < Kp_min) = Kp_min;         %Aplicar umbral de Kp.
+figure; plot(f, Kp);
 
-Kc = (2*pi*f).*(cosh(k.*hm)./sinh(k.*h));
-Kc(abs(Kc) < eps) = eps;         %Aplicar umbral de Kc.
-
+Kc = (2*pi*f).*(cosh(k.*(z_v+h))./sinh(k.*h));
+Kc(abs(Kc) < 0.1) = 0.1;         %Aplicar umbral de Kc.
+figure; plot(f, Kc);
 %% Cálculo de los coeficientes
 %   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
 %   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
@@ -146,26 +148,28 @@ Kc(abs(Kc) < eps) = eps;         %Aplicar umbral de Kc.
 
 %Partes real y de interés de las densidades espectrales cruzadas
 %   Forma: Sxy = Cxy + i*Qxy
+Cpp = real(Spp);
+Cuu = real(Suu);
+Cvv = real(Svv);
 Cpu = real(Spu);
 Cpv = real(Spv);
 Cuv = real(Suv);
 
+Cpp = Cpp./(Kp.^2);
+Cuu = Cuu./(Kc.^2);
+Cvv = Cvv./(Kc.^2);
+Cpu = Cpu./(Kc.*Kp);
+Cpv = Cpv./(Kc.*Kp);
+Cuv = Cuv./(Kc.^2);
+
+
 %Cálculo de coeficientes
-%   Se suma "eps" a cada denominador, esto para evitar posibles problemas
-%   de división por 0 y así no obtener NaNs o Infs.
-a1 = (Kp./Kc).*Cpu./Spp;
-b1 = (Kp./Kc).*Cpv./Spp;
-a2 = ((Kp./Kc).^2).*(Suu-Svv)./Spp;
-b2 = 2*((Kp./Kc).^2).*Cuv./Spp;
+a1 = Cpu./(sqrt(Cpp.*(Cuu+Cvv)));
+b1 = Cpv./(sqrt(Cpp.*(Cuu+Cvv)));
+a2 = (Cuu-Cvv)./(Cuu+Cvv);
+b2 = 2*Cuv./(Cuu+Cvv);
 
-% Limitar coeficientes solo a frecuencias con energía
-energy_threshold = 0.01 * max(Spp);
-valid = Spp > energy_threshold;
-
-a1(~valid) = 0;
-b1(~valid) = 0;
-a2(~valid) = 0;
-b2(~valid) = 0;
+%% Exportar resultados
 
 %Exportar solo los coeficientes correspondientes a frecuencias positivas
 % Solo en frecuencias positivas hay información relevante, la parte

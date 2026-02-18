@@ -83,17 +83,17 @@ K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(S)/(K+1)));
 
 %Densidades espectrales cruzadas
-[out_Spp, info_Spp] = wsa_psdwb(S, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Sss, info_Sss] = wsa_psdwb(S, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 [out_Suu, info_Suu] = wsa_psdwb(U, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 [out_Svv, info_Svv] = wsa_psdwb(V, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_Spu, info_Spu] = wsa_psdwb(S, ventana,'Y',U, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_Spv, info_Spv] = wsa_psdwb(S, ventana,'Y',V, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Ssu, info_Ssu] = wsa_psdwb(S, ventana,'Y',U, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_Ssv, info_Ssv] = wsa_psdwb(S, ventana,'Y',V, 'K', K, 'Nfft', Nfft, 'pc', pc);
 [out_Suv, info_Suv] = wsa_psdwb(U, ventana,'Y',V, 'K', K, 'Nfft', Nfft, 'pc', pc);
-Sss = out_Spp.I; W = out_Spp.W;
+Sss = out_Sss.I; W = out_Sss.W;
 Suu = out_Suu.I;
 Svv = out_Svv.I;
-Ssu = out_Spu.I;
-Ssv = out_Spv.I;
+Ssu = out_Ssu.I;
+Ssv = out_Ssv.I;
 Suv = out_Suv.I;
 
 %% Coeficientes de corrección dinámica Kp y Kc
@@ -134,6 +134,7 @@ b1 = Csv./(sqrt(Css.*(Cuu+Cvv)));
 a2 = (Cuu-Cvv)./(Cuu+Cvv);
 b2 = 2*Cuv./(Cuu+Cvv);
 
+%% Exportar resultados
 
 %Exportar solo los coeficientes correspondientes a frecuencias positivas
 % Solo en frecuencias positivas hay información relevante, la parte
@@ -149,20 +150,20 @@ out.b2 = b2(W>0);
 
 % Otras salidas que podrían ser de interés
 out.cross_spectra.W = W;
-out.cross_spectra.Spp = Sss;
+out.cross_spectra.Sss = Sss;
 out.cross_spectra.Suu = Suu;
 out.cross_spectra.Svv = Svv;
-out.cross_spectra.Spu = Ssu;
-out.cross_spectra.Spv = Ssv;
+out.cross_spectra.Ssu = Ssu;
+out.cross_spectra.Ssv = Ssv;
 out.cross_spectra.Suv = Suv;
 
 % Información de cálculos
 info = struct;
-info.info_Spp = info_Spp;
+info.info_Sss = info_Sss;
 info.info_Suu = info_Suu;
 info.info_Svv = info_Svv;
-info.info_Spu = info_Spu;
-info.info_Spv = info_Spv;
+info.info_Ssu = info_Ssu;
+info.info_Ssv = info_Ssv;
 info.info_Suv = info_Suv;
 
 end
