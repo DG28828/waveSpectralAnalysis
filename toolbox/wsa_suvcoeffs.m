@@ -1,4 +1,4 @@
-function [out, info] = wsa_suvcoeffs(S, U, V, varargin)
+function [out, info] = wsa_suvcoeffs(S, U, V, fs, z, h, varargin)
 %wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos boya Heave-Pitch-Roll.
 %
 %   Esta función estima los primeros 4 coeficientes de la serie de Fourier
@@ -8,11 +8,11 @@ function [out, info] = wsa_suvcoeffs(S, U, V, varargin)
 %
 %
 %   Argumentos de entrada:
-%       eta - secuencia de superficie libre 
+%       S - secuencia de superficie libre AST
 %           vector
-%       d_eta_x - secuencia de primeras derivadas de superficie libre (eta) en X
+%       U - secuencia de velocidades X (a una profunidad z)
 %           vector
-%       d_eta_y - secuencia de primeras derivadas de superficie libre (eta) en Y
+%       V - secuencia de velocidades Y (a una profunidad z)
 %           vector
 %
 %   Argumentos de salida:
@@ -40,6 +40,7 @@ function [out, info] = wsa_suvcoeffs(S, U, V, varargin)
 %% Manejo de entradas
 
 %Valores por defecto
+g_default = 9.81;   %m's^2
 DoF_default = 16;
 pc_default = 0;
 
@@ -49,13 +50,18 @@ p = inputParser;
 addRequired(p, 'S');
 addRequired(p, 'U');
 addRequired(p, 'V');
+addRequired(p, 'fs');
+addRequired(p, 'z');
+addRequired(p, 'h');
 
+addParameter(p, 'g', g_default);
 addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 
-parse(p, S, U, V, varargin{:});
+parse(p, S, U, V, fs, z, h, varargin{:});
 
 %Resultados
+g    = p.Results.g;
 DoF    = p.Results.DoF;
 pc     = p.Results.pc;
 
@@ -68,11 +74,7 @@ S = detrend(S-mean(S));
 U = detrend(U-mean(U));
 V = detrend(V-mean(V));
 
-%% Cálculo de los coeficientes
-%   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
-%   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
-%   artículo "Observations of the Directional Spectrum of Sea Waves Using
-%   the Motions of a Floating Buoy".
+%% Densidades espectrales cruzadas
 
 %Parámetros para las densidades espectrales cruzadas
 % Por defecto: DoF = 16 ;
@@ -94,22 +96,44 @@ Ssu = out_Spu.I;
 Ssv = out_Spv.I;
 Suv = out_Suv.I;
 
+%% Coeficientes de corrección dinámica Kp y Kc
+
+f = fs*W/(2*pi);
+k = wsa_k(f, h, g);
+
+Kc = (2*pi*f).*(cosh(k.*(z+h))./sinh(k.*h));
+Kc(abs(Kc) < 0.1) = 0.1;         %Aplicar umbral de Kc.
+figure; plot(f, Kc);
+
+%% Cálculo de los coeficientes
+%   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
+%   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
+%   artículo "Observations of the Directional Spectrum of Sea Waves Using
+%   the Motions of a Floating Buoy".
+
 %Partes real y de interés de las densidades espectrales cruzadas
 %   Forma: Sxy = Cxy + i*Qxy
 Css = real(Sss);
 Cuu = real(Suu);
 Cvv = real(Svv);
+Csu = real(Ssu);
+Csv = real(Ssv);
 Cuv = real(Suv);
-Csu = Ssu;
-Csv = Ssv;
+
+
+Cuu = Cuu./(Kc.^2);
+Cvv = Cvv./(Kc.^2);
+Csu = Csu./Kc;
+Csv = Csv./Kc;
+Cuv = Cuv./(Kc.^2);
+
 
 %Cálculo de coeficientes
-%   Se suma "eps" a cada denominador, esto para evitar posibles problemas
-%   de división por 0 y así no obtener NaNs o Infs.
-a1 = imag(Csu)./(sqrt(Css.*(Cuu+Cvv))+eps);
-b1 = imag(Csv)./(sqrt(Css.*(Cuu+Cvv))+eps);
-a2 = (imag(Csu)-imag(Csv))./((Cuu+Cvv+eps));
-b2 = 2*Cuv./((Cuu+Cvv+eps));
+a1 = Csu./(sqrt(Css.*(Cuu+Cvv)));
+b1 = Csv./(sqrt(Css.*(Cuu+Cvv)));
+a2 = (Cuu-Cvv)./(Cuu+Cvv);
+b2 = 2*Cuv./(Cuu+Cvv);
+
 
 %Exportar solo los coeficientes correspondientes a frecuencias positivas
 % Solo en frecuencias positivas hay información relevante, la parte
