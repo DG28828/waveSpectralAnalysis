@@ -1,40 +1,103 @@
-function [out, info] = wsa_suvcoeffs(S, U, V, fs, z, h, varargin)
-%wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos boya Heave-Pitch-Roll.
+function [out, info] = wsa_suvcoeffs(S, U, V, fs, z_v, h, varargin)
+%wsa_suvcoeffs - coeficientes de la serie de Fourier a partir de datos SUV.
 %
-%   Esta función estima los primeros 4 coeficientes de la serie de Fourier
-%   a1, a2, b1, b2 a partir de datos derivados de mediciones HPR (Heave-Pitch-Roll). 
+%   Esta función estima los primeros cuatro coeficientes de la serie de
+%   Fourier (a1, b1, a2, b2) del espectro direccional del oleaje a partir
+%   de mediciones SUV (elevación superficial y velocidades orbitales
+%   horizontales).
+%
+%   Las velocidades deben corresponder a una cota conocida z_v respecto al
+%   nivel medio del mar para aplicar la corrección hidrodinámica basada en
+%   teoría lineal de ondas en profundidad finita.
+%
+%   La estimación de densidades espectrales se realiza mediante el método
+%   de Welch-Barlett y los coeficientes se calculan siguiendo la formulación
+%   clásica de (Longuet-Higgins et al., 1963).
+%
 %
 %   Sintaxis:
+%       out = wsa_suvcoeffs(S, U, V, fs, z_v, h)
+%           estima los coeficientes direccionales a1, b1, a2 y b2.
+%
+%       [out, info] = wsa_suvcoeffs(S, U, V, fs, z_v, h)
+%           devuelve adicionalmente una estructura info con los parámetros
+%           internos utilizados en el cálculo.
 %
 %
-%   Argumentos de entrada:
-%       S - secuencia de superficie libre AST
-%           vector
-%       U - secuencia de velocidades X (a una profunidad z)
-%           vector
-%       V - secuencia de velocidades Y (a una profunidad z)
-%           vector
+%   Argumentos de entrada (requeridos):
+%       S       - Elevación superficial (η).
+%                   Vector columna o fila.
+%
+%       U       - Velocidad orbital horizontal en dirección X.
+%                   Vector del mismo tamaño que S.
+%
+%       V       - Velocidad orbital horizontal en dirección Y.
+%                   Vector del mismo tamaño que S.
+%
+%       fs      - Frecuencia de muestreo.
+%                   Escalar positivo [Hz].
+%
+%       z_v     - Cota de medición de las velocidades respecto al nivel medio.
+%                   Escalar [m].
+%                   Convención: negativo bajo el nivel medio.
+%                   Debe cumplir: -h < z < 0.
+%
+%       h       - Profundidad total del sitio.
+%                   Escalar positivo [m].
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'g'     - Aceleración de la gravedad.
+%                   Escalar [m/s^2].
+%                   Por defecto: 9.81
+%
+%       'DoF'   - Grados de libertad del estimador de Welch.
+%                   Entero positivo.
+%                   Por defecto: 16
+%
+%       'pc'    - Print console. Muestra ajustes automáticos.
+%                   true | false
+%                   Por defecto: false
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           a1 - primer coeficiente de la serie de Fourier
-%               vector
-%           a2 - segundo coeficiente de la serie de Fourier
-%               vector
-%           b1 - tercero coeficiente de la serie de Fourier
-%               vector
-%           b2 - cuarto coeficiente de la serie de Fourier
-%               vector
-%           W - Frecuencias angulares digitales (rad/muestra)
-%               vector
-%       info - Información de parámetros finales del cálculo
-%           struct
+%   out         - Estructura con:
+%       W           - Frecuencias angulares digitales [rad/muestra]
+%       a1          - Primer coeficiente de Fourier
+%       b1          - Segundo coeficiente de Fourier
+%       a2          - Tercer coeficiente de Fourier
+%       b2          - Cuarto coeficiente de Fourier
+%
+%   info        - Estructura con información auxiliar del cálculo:
+%                   info_Sss, info_Suu, info_Svv,
+%                   info_Ssu, info_Ssv, info_Suv
+%
+%
+%   Notas:
+%   • Se elimina la media y la tendencia lineal de las señales antes
+%     del análisis espectral.
+%
+%   • La corrección hidrodinámica de velocidades se realiza mediante:
+%
+%         Kc = ω cosh(k(z + h)) / sinh(kh)
+%
+%     donde k satisface la relación de dispersión:
+%
+%         ω² = g k tanh(kh)
+%
+%   • No se aplica corrección dinámica a S, ya que corresponde a la
+%     elevación superficial.
+%
+%   • Solo se reportan frecuencias positivas debido a la simetría del
+%     espectro de Fourier.
+%
+%
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
-% Fecha de creación: 03/02/2026
-% Fecha de modificación: 03/02/2026
+% Fecha de creación: 11/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -58,7 +121,7 @@ addParameter(p, 'g', g_default);
 addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
 
-parse(p, S, U, V, fs, z, h, varargin{:});
+parse(p, S, U, V, fs, z_v, h, varargin{:});
 
 %Resultados
 g    = p.Results.g;
@@ -101,7 +164,7 @@ Suv = out_Suv.I;
 f = fs*W/(2*pi);
 k = wsa_k(f, h, g);
 
-Kc = (2*pi*f).*(cosh(k.*(z+h))./sinh(k.*h));
+Kc = (2*pi*f).*(cosh(k.*(z_v+h))./sinh(k.*h));
 Kc(abs(Kc) < 0.1) = 0.1;         %Aplicar umbral de Kc.
 figure; plot(f, Kc);
 

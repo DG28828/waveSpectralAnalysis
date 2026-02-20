@@ -1,41 +1,90 @@
 function [out, info] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y, varargin)
-%wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos boya Heave-Pitch-Roll.
+%wsa_hprcoeffs - coeficientes de la serie de Fourier a partir de datos HPR.
 %
-%   Esta función estima los primeros 4 coeficientes de la serie de Fourier
-%   a1, a2, b1, b2 a partir de datos derivados de mediciones HPR (Heave-Pitch-Roll). 
+%   Esta función estima los primeros cuatro coeficientes de la serie de
+%   Fourier (a1, b1, a2, b2) del espectro direccional del oleaje a partir
+%   de mediciones HPR (heave, pitch y roll) típicas de boyas direccionales.
+%
+%   Se asume que:
+%       eta      corresponde a la elevación superficial (heave),
+%       d_eta_x  corresponde a la pendiente superficial en dirección X (pitch),
+%       d_eta_y  corresponde a la pendiente superficial en dirección Y (roll).
+%
+%   La estimación de densidades espectrales se realiza mediante el método
+%   de Welch-Barlett y los coeficientes se calculan siguiendo la formulación
+%   clásica de (Longuet-Higgins et al., 1963).
+%
 %
 %   Sintaxis:
+%       out = wsa_hprcoeffs(eta, d_eta_x, d_eta_y)
+%           estima los coeficientes direccionales a1, b1, a2 y b2.
+%
+%       [out, info] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y)
+%           devuelve adicionalmente una estructura info con los parámetros
+%           internos utilizados en el cálculo.
 %
 %
-%   Argumentos de entrada:
-%       eta - secuencia de superficie libre 
-%           vector
-%       d_eta_x - secuencia de primeras derivadas de superficie libre (eta) en X
-%           vector
-%       d_eta_y - secuencia de primeras derivadas de superficie libre (eta) en Y
-%           vector
+%   Argumentos de entrada (requeridos):
+%       eta         - Elevación superficial (heave).
+%                       Vector columna o fila.
+%
+%       d_eta_x     - Pendiente superficial en dirección X (pitch).
+%                       Vector del mismo tamaño que eta.
+%
+%       d_eta_y     - Pendiente superficial en dirección Y (roll).
+%                       Vector del mismo tamaño que eta.
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'DoF'   - Grados de libertad del estimador de Welch.
+%                   Entero positivo.
+%                   Por defecto: 16
+%
+%       'pc'    - Print console. Muestra ajustes automáticos.
+%                   true | false
+%                   Por defecto: false
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           a1 - primer coeficiente de la serie de Fourier
-%               vector
-%           a2 - segundo coeficiente de la serie de Fourier
-%               vector
-%           b1 - tercero coeficiente de la serie de Fourier
-%               vector
-%           b2 - cuarto coeficiente de la serie de Fourier
-%               vector
-%           W - Frecuencias angulares digitales (rad/muestra)
-%               vector
-%       info - Información de parámetros finales del cálculo
-%           struct
+%   out         - Estructura con:
+%       W           - Frecuencias angulares digitales [rad/muestra]
+%       a1          - Primer coeficiente de Fourier
+%       b1          - Segundo coeficiente de Fourier
+%       a2          - Tercer coeficiente de Fourier
+%       b2          - Cuarto coeficiente de Fourier
+%
+%   info        - Estructura con información auxiliar del cálculo:
+%                   info_Spp, info_Suu, info_Svv,
+%                   info_Spu, info_Spv, info_Suv
+%
+%
+%   Notas:
+%   • Se asume que las señales han sido previamente calibradas y
+%     transformadas a elevación y pendientes superficiales.
+%
+%   • Los coeficientes se obtienen a partir de las partes reales e
+%     imaginarias de las densidades espectrales cruzadas:
+%
+%         a1 = Q12 / sqrt(C11 (C22 + C33))
+%         b1 = Q13 / sqrt(C11 (C22 + C33))
+%         a2 = (C22 - C33) / (C22 + C33)
+%         b2 = 2 C23 / (C22 + C33)
+%
+%     donde Cij y Qij corresponden a las partes real e imaginaria de
+%     las densidades espectrales cruzadas.
+%
+%   • Solo se reportan frecuencias positivas debido a la simetría del
+%     espectro de Fourier.
+%
+%
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
-% Fecha de creación: 03/02/2026
-% Fecha de modificación: 03/02/2026
+% Fecha de creación: 06/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
+
 
 %% Manejo de entradas
 
@@ -97,10 +146,10 @@ Q13 = imag(Spv);
 %Cálculo de coeficientes
 %   Se suma "eps" a cada denominador, esto para evitar posibles problemas
 %   de división por 0 y así no obtener NaNs o Infs.
-a1 = Q12./(sqrt(C11.*(C22+C33))+eps);
-b1 = Q13./(sqrt(C11.*(C22+C33))+eps);
-a2 = (C22-C33)./((C22+C33+eps));
-b2 = 2*C23./((C22+C33+eps));
+a1 = Q12./(sqrt(C11.*(C22+C33)));
+b1 = Q13./(sqrt(C11.*(C22+C33)));
+a2 = (C22-C33)./((C22+C33));
+b2 = 2*C23./((C22+C33));
 
 %Exportar solo los coeficientes correspondientes a frecuencias positivas
 % Solo en frecuencias positivas hay información relevante, la parte

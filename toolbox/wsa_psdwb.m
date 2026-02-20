@@ -5,49 +5,89 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 %   de X mediante el método de Welch-Barlett.
 %   Si se especifica Y, se calcula la densidad espectral de potencia cruzada 
 %   de X e Y. La convención empleada para la densidad espectral de potencia
-%   cruzada es la dada por (Ochi, 1998) denotada como Ixy = X*[k]Y[k].
+%   cruzada es la dada por (Ochi, 1998).
 %                           
 %
 %   Sintaxis:
+%       out = wsa_psdwb(X, ventana) estima la densidad espectral de potencia
+%           (PSD) de la señal X utilizando el método de Welch-Barlett.
+%
+%       [out, info] = wsa_psdwb(X, ventana) devuelve adicionalmente una estructura
+%           info con los parámetros finales utilizados en el cálculo.
+%
+%       out = wsa_psdwb(X, ventana, 'Y', Y) estima la densidad espectral de potencia
+%           cruzada entre X e Y. La convención empleada es:
+%
+%                       I_xy[k] = conj(X[k]) · Y[k]
+%
+%           donde X[k] y Y[k] son las DFT de los segmentos enventanados.
 %
 %
-%   Argumentos de entrada:
-%       X - Arreglo de entrada X 
-%           vector
-%       N - Longitud del segmento
-%           entero | (opcional) Por defecto: N = 2*M/(K+1) 
-%       N0 - Longitud del solapamiento entre los segmentos
-%           entero (opcional) Por defecto: N0 = N/2  (50 %)
-%       ventana - ventana a emplear 
-%           string ("rectangular", "hann", "hamming") | vector
-%       M - Longitud de la secuencia de entrada 
-%           entero | (opcional) Por defecto: M = longitud de X
-%       K - Número de segmentos
-%           entero | (opcional) Por defecto K = (M-N0)/(N-N0)
-%       Nfft - Longitud del periodograma del segmento
-%           entero (potencia de 2) | (opcional) Por defecto: máximo entre
-%           la potencia de 2 mayor mas cercana a N y 512.
-%       Y - Arreglo de entrada Y 
-%           vector | (opcional) Por defecto: []
-%       pc - Bandera para imprimir en consola (print consle): brinda
-%       información acerca de modificaciones en valores de M, N, N0, K, Nfft
-%           bool | (opcional) Por defecto: 0
+%   Argumentos de entrada (requeridos):
+%       X       - Señal de entrada.
+%                   Vector columna o fila.
+%
+%       ventana - Tipo de ventana a emplear.
+%                   "rectangular" | "hann" | "hamming"
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'N'     - Longitud del segmento.
+%                   Entero par.
+%                   Por defecto: N = 2*M/(K+1)
+%
+%       'N0'    - Longitud del solapamiento entre segmentos.
+%                   Entero.
+%                   Por defecto: N0 = N/2  (50%%)
+%
+%       'M'     - Longitud efectiva de la secuencia.
+%                   Entero.
+%                   Por defecto: M = longitud ajustada de X.
+%
+%       'K'     - Número de segmentos.
+%                   Entero positivo.
+%                   Por defecto: K = 8  (16 grados de libertad).
+%                   Por defecto K = (M-N0)/(N-N0) (Si se especifica M, N o N0)
+%
+%       'Nfft'  - Longitud de la DFT de cada segmento.
+%                   Entero (potencia de 2).
+%                   Por defecto: max(512, 2^nextpow2(N)).
+%
+%       'Y'     - Segunda señal para espectro cruzado.
+%                   Vector del mismo tamaño que X.
+%                   Por defecto: []
+%
+%       'pc'    - Print console. Muestra en consola los ajustes
+%               automáticos de parámetros.
+%                   true | false
+%                   Por defecto: false
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           I - Estimador del espectro de potencia por rad/muestra [unidad de X]^2/rad/muestra
-%               vector
-%           W - Frecuencias angulares digitales (rad/muestra)
-%               vector
-%       info - Información de parámetros finales del cálculo
-%           struct
+%   out         - Estructura con:
+%       I           - Estimador de la densidad espectral
+%                   [unidad de X]^2 / rad/muestra
+%       W           - Frecuencias angulares digitales (rad/muestra)
+%
+%   info        - Estructura con los parámetros finales utilizados:
+%                   M, N, N0, K, Nfft, DoF, window
+%
+%
+%   Notas:
+%   • El estimador se normaliza mediante la constante U = mean(w.^2)
+%     para garantizar insesgamiento asintótico.
+%   • Si los parámetros no son consistentes, la función ajusta
+%     automáticamente M, N, N0 o K para cumplir:
+%
+%         K = (M - N0)/(N - N0)
+%
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 28/01/2026
-% Fecha de modificación: 03/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

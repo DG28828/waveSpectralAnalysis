@@ -1,39 +1,94 @@
 function [out, info] = wsa_dirmem(a1, b1, a2, b2, Ntheta, varargin)
-%wsa_dirmem - método de máxima entropía para distribución direccional
+%wsa_dirmem - método de máxima entropía para distribución direccional.
 %
 %   Esta función emplea el método de máxima entropía (MEM) para determinar
-%   la distribución direccional de señales de mar a partir de los
-%   coeficientes de la serie de Fourier. El método empleado es el
-%   desarrollado por (Lygre & Krogstad, 1986) en su artículo "Maximum
-%   Entropy Estimation of the Directional Distribution in Ocean Wave
-%   Spectra".
+%   la distribución direccional D(θ) del oleaje a partir de los primeros
+%   cuatro coeficientes de la serie de Fourier.
+%
+%   El método implementado corresponde al desarrollado por
+%   (Lygre & Krogstad, 1986) en su artículo:
+%   "Maximum Entropy Estimation of the Directional Distribution in Ocean
+%   Wave Spectra".
+%
 %
 %   Sintaxis:
+%       out = wsa_dirmem(a1, b1, a2, b2, Ntheta)
+%           estima la distribución direccional normalizada.
+%
+%       [out, info] = wsa_dirmem(a1, b1, a2, b2, Ntheta)
+%           devuelve adicionalmente información diagnóstica del cálculo.
 %
 %
-%   Argumentos de entrada:
-%       a1 - primer coeficiente de la serie de Fourier (d1 de (Lygre & Krogstad, 1986)
-%           vector
-%       b1 - segundo coeficiente de la serie de Fourier (d2 de (Lygre & Krogstad, 1986)
-%           vector
-%       a2 - tercer coeficiente de la serie de Fourier (d3 de (Lygre & Krogstad, 1986)
-%           vector
-%       b2 - cuarto coeficiente de la serie de Fourier (d4 de (Lygre & Krogstad, 1986)
-%           vector
+%   Argumentos de entrada (requeridos):
+%       a1      - Primer coeficiente de Fourier.
+%                   Vector.
+%
+%       b1      - Segundo coeficiente de Fourier.
+%                   Vector.
+%
+%       a2      - Tercer coeficiente de Fourier.
+%                   Vector.
+%
+%       b2      - Cuarto coeficiente de Fourier.
+%                   Vector.
+%
+%       Ntheta  - Número de divisiones angulares para discretizar
+%                   el intervalo [0, 2π).
+%                   Escalar entero positivo.
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       (No definidos actualmente)
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           D - Distribución direccional normalizada [1 / rad]
-%               vector
-%           theta - Angulos [rad]
-%               vector
+%   out         - Estructura con:
+%       D           - Distribución direccional normalizada [1/rad]
+%                       Matriz (frecuencia × dirección).
+%
+%       theta       - Vector de ángulos [rad] en el intervalo [0, 2π).
+%
+%       mem_params  - Parámetros internos del método:
+%                       C1, C2, phi1, phi2
+%
+%   info        - Información diagnóstica:
+%       D_is_pos       - true si D ≥ 0 (dentro de tolerancia numérica)
+%       min_D_value    - Valor mínimo de D
+%
+%
+%   Notas:
+%   • Se utiliza la misma notación compleja que en (Lygre & Krogstad, 1986):
+%
+%         C1 = a1 + i b1
+%         C2 = a2 + i b2
+%
+%     y los parámetros:
+%
+%         φ1 = (C1 − C1* C2) / (1 − |C1|²)
+%         φ2 = C2 − C1 φ1
+%
+%   • La distribución direccional se calcula como:
+%
+%         D(θ) = (1 − φ1 C1* − φ2 C2*) /
+%                (2π |1 − φ1 e^(−iθ) − φ2 e^(−2iθ)|²)
+%
+%   • Teóricamente D(θ) es real y no negativa. Sin embargo, pueden
+%     aparecer pequeñas partes imaginarias debido a errores numéricos,
+%     por lo que se conserva únicamente la parte real.
+%
+%   • La distribución se normaliza de modo que:
+%
+%         ∫₀²π D(θ) dθ = 1
+%
+%   • El último punto θ = 2π se excluye para evitar duplicidad con θ = 0.
+%
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/02/2026
-% Fecha de modificación: 04/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
 %% Cálculo de la distribución direccional

@@ -1,50 +1,122 @@
 function [out, info] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h, varargin)
 %wsa_puvcoeffs - coeficientes de la serie de Fourier a partir de datos PUV.
 %
-%   Esta función estima los primeros 4 coeficientes de la serie de Fourier
-%   a1, a2, b1, b2 a partir de datos derivados de mediciones PUV (presión y
-%   velocidades orbitales). Los datos de entrada deben estar ubicados en
-%   superficie y adecuadamente corregidos hidrodinámicamente.
+%   Esta función estima los primeros cuatro coeficientes de la serie de
+%   Fourier (a1, b1, a2, b2) del espectro direccional del oleaje a partir
+%   de mediciones PUV (presión y velocidades orbitales horizontales).
+%
+%   Las mediciones deben realizarse en cotas conocidas respecto al nivel
+%   medio del mar, definidas mediante z_p (presión) y z_v (velocidades),
+%   para aplicar la corrección hidrodinámica basada en teoría lineal de
+%   ondas en profundidad finita.
+%
+%   La estimación de densidades espectrales se realiza mediante el método
+%   de Welch-Barlett y los coeficientes se calculan siguiendo la formulación
+%   clásica de (Longuet-Higgins et al., 1963).
+%
 %
 %   Sintaxis:
+%       out = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h)
+%           estima los coeficientes direccionales a1, b1, a2 y b2.
+%
+%       [out, info] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h)
+%           devuelve adicionalmente una estructura info con los parámetros
+%           internos utilizados en el cálculo.
 %
 %
-%   Argumentos de entrada:
-%       p - secuencia de presión 
-%           vector
-%       U - secuencia de velocidades orbitales en X
-%           vector
-%       V - secuencia de velocidades orbitales en Y
-%           vector
-%       un - unidad de los datos de entrada
-%           string
-%       fs - frecuencia de muestreo (Hz)
-%           entero
-%       hm - altura del equipo de medición respecto al fondo marino [m].
-%           entero (positivo)
-%       h - profundidad del fondo marino [m].
-%           entero (positivo)
+%   Argumentos de entrada (requeridos):
+%       P       - Señal de presión.
+%                   Vector columna o fila.
+%
+%       U       - Velocidad orbital horizontal en dirección X.
+%                   Vector del mismo tamaño que P.
+%
+%       V       - Velocidad orbital horizontal en dirección Y.
+%                   Vector del mismo tamaño que P.
+%
+%       fs      - Frecuencia de muestreo.
+%                   Escalar positivo [Hz].
+%
+%       un      - Unidad de la señal de presión.
+%                   "dBa"  |  "m"
+%
+%       z_p     - Cota de medición de presión respecto al nivel medio.
+%                   Escalar [m].
+%                   Convención: negativo bajo el nivel medio.
+%                   Debe cumplir: -h < z_p < 0.
+%
+%       z_v     - Cota de medición de velocidades respecto al nivel medio.
+%                   Escalar [m].
+%                   Convención: negativo bajo el nivel medio.
+%                   Debe cumplir: -h < z_v < 0.
+%
+%       h       - Profundidad total del sitio.
+%                   Escalar positivo [m].
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'g'         - Aceleración de la gravedad.
+%                       Escalar [m/s^2].
+%                       Por defecto: 9.81
+%
+%       'rho'       - Densidad del agua.
+%                       Escalar [kg/m^3].
+%                       Por defecto: 1025
+%
+%       'DoF'       - Grados de libertad del estimador de Welch.
+%                       Entero positivo.
+%                       Por defecto: 16
+%
+%       'pc'        - Print console. Muestra ajustes automáticos.
+%                       true | false
+%                       Por defecto: false
+%
+%       'Kp_min'    - Valor mínimo permitido para el factor de corrección
+%                     dinámica de presión.
+%                       Escalar positivo.
+%                       Por defecto: 0.2
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           a1 - primer coeficiente de la serie de Fourier
-%               vector
-%           a2 - segundo coeficiente de la serie de Fourier
-%               vector
-%           b1 - tercero coeficiente de la serie de Fourier
-%               vector
-%           b2 - cuarto coeficiente de la serie de Fourier
-%               vector
-%           W - Frecuencias angulares digitales (rad/muestra)
-%               vector
-%       info - Información de parámetros finales del cálculo
-%           struct
+%   out         - Estructura con:
+%       f           - Frecuencias físicas [Hz] (solo positivas)
+%       W           - Frecuencias angulares digitales [rad/muestra]
+%       a1          - Primer coeficiente de Fourier
+%       b1          - Segundo coeficiente de Fourier
+%       a2          - Tercer coeficiente de Fourier
+%       b2          - Cuarto coeficiente de Fourier
+%       k           - Número de onda asociado [rad/m]
+%       Kp          - Factor de corrección dinámica de presión
+%       Kc          - Factor de corrección dinámica de velocidad
+%
+%   info        - Estructura con información auxiliar del cálculo:
+%                   info_Spp, info_Suu, info_Svv,
+%                   info_Spu, info_Spv, info_Suv
+%
+%
+%   Notas:
+%   • Se elimina la componente hidrostática y la tendencia lineal antes
+%     del análisis espectral.
+%
+%   • La corrección hidrodinámica se realiza mediante:
+%
+%         Kp = cosh(k(z_p + h)) / cosh(kh)
+%         Kc = ω cosh(k(z_v + h)) / sinh(kh)
+%
+%     donde k satisface la relación de dispersión:
+%
+%         ω² = g k tanh(kh)
+%
+%   • Solo se reportan frecuencias positivas debido a la simetría del
+%     espectro de Fourier.
+%
+%
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/02/2026
-% Fecha de modificación: 03/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -62,8 +134,8 @@ p = inputParser;
 addRequired(p, 'P');
 addRequired(p, 'U');
 addRequired(p, 'V');
-addRequired(p, 'un');
 addRequired(p, 'fs');
+addRequired(p, 'un');
 addRequired(p, 'z_p');
 addRequired(p, 'z_v');
 addRequired(p, 'h');

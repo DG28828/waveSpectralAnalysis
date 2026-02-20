@@ -1,48 +1,115 @@
 function [out, info] = wsa_pspectrum(P, fs, un, z_p, h, varargin)
-%wsa_spectrum - espectro de energía a partir de registro de presión
+%wsa_pspectrum - espectro de energía a partir de registro de presión.
 %
-%   Esta función estima el espectro de energía de una secuencia de 
-%   datos de presión (X). El espectro calculado corresponde a la densidad 
-%   espectral de potencia unilateral (frecuencias positivas). El espectro 
-%   se calcula mediante el método de periodogramas medio, siguiendo la 
-%   metodología de Welch-Barlett. El espectro resultante presenta corrección
-%   hidrodinámica.
+%   Esta función estima el espectro de energía superficial a partir de un 
+%   registro de presión medido a una profundidad determinada. El espectro 
+%   calculado corresponde a la densidad espectral de potencia unilateral 
+%   (frecuencias positivas). El espectro se calcula mediante el método de 
+%   periodogramas medio, siguiendo la metodología de Welch-Barlett, e 
+%   incluye corrección hidrodinámica.
+%
 %
 %   Sintaxis:
+%       out = wsa_pspectrum(P, fs, un, z_p, h) estima el espectro de 
+%           energía superficial a partir de la señal de presión P.
+%
+%       [out, info] = wsa_pspectrum(P, fs, un, z_p, h) devuelve 
+%           adicionalmente una estructura info con los parámetros finales 
+%           utilizados en el cálculo y métricas de validación energética.
 %
 %
-%   Argumentos de entrada:
-%       P - secuencia de datos de presión [dBa] | [m]
-%           vector
-%       un - unidad de los datos de entrada
-%           string
-%       fs - frecuencia de muestreo (Hz)
-%           entero
-%       hm - altura del equipo de medición respecto al fondo marino [m].
-%           entero (positivo)
-%       h - profundidad del fondo marino [m].
-%           entero (positivo)
-%       DoF - grados de libertad (Degrees of Freedom) del espectro. Debe
-%       ser entero, par, mayor o igual a 2.
-%           entero | (opcional) Por defecto: DoF = 16
-%       pc - Bandera para imprimir en consola (print consle): brinda
-%       información acerca de modificaciones en valores de M, N, N0, K, Nfft
-%           bool | (opcional) Por defecto: 0
+%   Argumentos de entrada (requeridos):
+%       P       - Señal de presión.
+%                   Vector columna o fila.
+%                   Unidades: [dBa] o [m]
+%
+%       un      - Unidad de los datos de entrada.
+%                   "dBa" | "m"
+%
+%       fs      - Frecuencia de muestreo.
+%                   Escalar positivo (Hz).
+%
+%       z_p     - Profundidad del sensor respecto al nivel medio del mar.
+%                   Escalar negativo (m).
+%                   (z_p = 0 en el nivel medio, z_p < 0 bajo la superficie)
+%
+%       h       - Profundidad del fondo marino.
+%                   Escalar positivo (m).
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'g'     - Aceleración gravitacional.
+%                   Escalar positivo.
+%                   Por defecto: g = 9.81 m/s^2.
+%
+%       'rho'   - Densidad del agua.
+%                   Escalar positivo.
+%                   Por defecto: rho = 1025 kg/m^3.
+%
+%       'DoF'   - Grados de libertad (Degrees of Freedom) del espectro.
+%                   Entero par, mayor o igual a 2.
+%                   Por defecto: DoF = 16.
+%                   Se cumple que DoF = 2K.
+%
+%       'pc'    - Print console. Muestra en consola información de
+%                   validación energética.
+%                   true | false
+%                   Por defecto: false
+%
+%       'Kp_min' - Valor mínimo permitido para el factor de corrección
+%                   hidrodinámica Kp.
+%                   Escalar positivo.
+%                   Por defecto: Kp_min = 0.2.
+%
 %
 %   Argumentos de salida:
-%       out - Salidas numéricas | struct
-%           S - estimador del espectro de energía unilateral m^2/Hz
-%               vector
-%           f - frecuencias físicas Hz
-%               vector
-%       info - Información de parámetros finales del cálculo
-%           struct
+%   out         - Estructura con:
+%       S           - Espectro de energía superficial corregido
+%                   [m^2 / Hz]
+%       f           - Frecuencias físicas (Hz)
+%       Spp         - Espectro de energía de presión sin corregir
+%       Kp          - Factor de corrección hidrodinámica
+%       k           - Número de onda asociado a cada frecuencia
+%
+%   info        - Estructura con los parámetros y métricas finales:
+%                   M, N, N0, K, Nfft, DoF, window,
+%                   fs, varianza, m0, error_relativo
+%
+%
+%   Notas:
+%   • Si las unidades de entrada son "dBa", la señal se convierte a metros
+%     de columna de agua mediante:
+%
+%         P = P / (rho·g)
+%
+%   • Se elimina la presión hidrostática restando el valor medio y
+%     eliminando tendencias de baja frecuencia.
+%   • El espectro unilateral se obtiene a partir de la PSD bilateral
+%     estimada mediante WSA_PSDWB.
+%   • La corrección hidrodinámica se realiza según:
+%
+%         S = Spp / Kp^2
+%
+%     donde:
+%
+%         Kp = cosh(k(z_p + h)) / cosh(kh)
+%
+%     donde z_p es negativo y representa la posición vertical del sensor
+%     medida desde el nivel medio del mar.
+%
+%     y el número de onda k se obtiene resolviendo la ecuación de
+%     dispersión lineal.
+%   • Se realiza validación energética verificando que:
+%
+%         ∫_0^∞ Spp(f) df ≈ var(P)
+%
+%
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 30/01/2026
-% Fecha de modificación: 07/02/2026
+% Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
