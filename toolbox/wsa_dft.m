@@ -1,7 +1,7 @@
 function [H, W] = wsa_dft(h, Nfft)
 %wsa_dft - Transformada Discreta de Fourier (Discrete Fourier Transform)
 %
-%   Esta función calcula la transformada discreta de Fourier de x por medio
+%   Esta función calcula la transformada discreta de Fourier de h por medio
 %   de una llamada a la función fft de MATLAB, el cual emplea el algoritmo
 %   de la Transformada Rápida de Fourier (FFT).
 %
