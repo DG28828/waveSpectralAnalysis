@@ -97,7 +97,7 @@ function [out, info] = wsa_suvcoeffs(S, U, V, fs, z_v, h, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 11/02/2026
-% Fecha de modificación: 20/02/2026
+% Fecha de modificación: 03/03/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

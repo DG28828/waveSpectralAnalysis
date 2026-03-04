@@ -116,7 +116,7 @@ function [out, info] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/02/2026
-% Fecha de modificación: 20/02/2026
+% Fecha de modificación: 03/03/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
