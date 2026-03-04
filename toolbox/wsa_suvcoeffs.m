@@ -114,7 +114,7 @@ addRequired(p, 'S');
 addRequired(p, 'U');
 addRequired(p, 'V');
 addRequired(p, 'fs');
-addRequired(p, 'z');
+addRequired(p, 'z_v');
 addRequired(p, 'h');
 
 addParameter(p, 'g', g_default);
@@ -136,6 +136,8 @@ pc     = p.Results.pc;
 S = detrend(S-mean(S));
 U = detrend(U-mean(U));
 V = detrend(V-mean(V));
+
+
 
 %% Densidades espectrales cruzadas
 
@@ -159,14 +161,34 @@ Ssu = out_Ssu.I;
 Ssv = out_Ssv.I;
 Suv = out_Suv.I;
 
-%% Coeficientes de corrección dinámica Kp y Kc
+%% Componentes reales de las densidades espectrales cruzadas
+%Partes real y de interés de las densidades espectrales cruzadas
+%   Forma: Sxy = Cxy + i*Qxy
+Css = real(Sss);
+Cuu = real(Suu);
+Cvv = real(Svv);
+%Csu = real(Ssu);
+%Csv = real(Ssv);
+%Cuv = real(Suv);
 
+Csu = abs(Ssu);
+Csv = abs(Ssv);
+Cuv = abs(Suv); 
+
+%% Coeficientes de corrección dinámica Kp
+
+% Estimación teórica del número de onda
 f = fs*W/(2*pi);
 k = wsa_k(f, h, g);
 
-Kc = (2*pi*f).*(cosh(k.*(z_v+h))./sinh(k.*h));
-Kc(abs(Kc) < 0.1) = 0.1;         %Aplicar umbral de Kc.
-figure; plot(f, Kc);
+%Coeficiente Kp
+Kp = (cosh(k.*(z_v+h))./cosh(k.*h));
+Kp(abs(Kp) < 0.2) = 0.2;         %Aplicar umbral de Kc.
+
+%% Coeficiente de conversión de velocidad a pendientes
+
+omega = (2*pi*f);
+alpha = omega./g;
 
 %% Cálculo de los coeficientes
 %   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
@@ -174,28 +196,50 @@ figure; plot(f, Kc);
 %   artículo "Observations of the Directional Spectrum of Sea Waves Using
 %   the Motions of a Floating Buoy".
 
-%Partes real y de interés de las densidades espectrales cruzadas
-%   Forma: Sxy = Cxy + i*Qxy
-Css = real(Sss);
-Cuu = real(Suu);
-Cvv = real(Svv);
-Csu = real(Ssu);
-Csv = real(Ssv);
-Cuv = real(Suv);
+
+Cuu = (alpha.^2).*Cuu./(Kp.^2);
+Cvv = (alpha.^2).*Cvv./(Kp.^2);
+Csu = alpha.*Csu./Kp;
+Csv = alpha.*Csv./Kp;
+Cuv = (alpha.^2).*Cuv./(Kp.^2);
 
 
-Cuu = Cuu./(Kc.^2);
-Cvv = Cvv./(Kc.^2);
-Csu = Csu./Kc;
-Csv = Csv./Kc;
-Cuv = Cuv./(Kc.^2);
+k_exp = sqrt((Cuu+Cvv)./Css);
 
 
 %Cálculo de coeficientes
-a1 = Csu./(sqrt(Css.*(Cuu+Cvv)));
-b1 = Csv./(sqrt(Css.*(Cuu+Cvv)));
-a2 = (Cuu-Cvv)./(Cuu+Cvv);
-b2 = 2*Cuv./(Cuu+Cvv);
+% a1 = Csu./(sqrt(Css.*(Cuu+Cvv)));
+% b1 = Csv./(sqrt(Css.*(Cuu+Cvv)));
+% a2 = (Cuu-Cvv)./(Cuu+Cvv);
+% b2 = 2*Cuv./(Cuu+Cvv);
+
+% a1 = Csu./(sqrt(Css.*(Cuu+Cvv)));
+% b1 = Csv./(sqrt(Css.*(Cuu+Cvv)));
+% a2 = (Csu2-Csv2)./(Cuu+Cvv);
+% b2 = 2*Cuv./(Cuu+Cvv);
+
+% a1 = Csu./Css;
+% b1 = Csv./Css;
+% a2 = (Cuu-Cvv)./Css;
+% b2 = 2*Cuv./Css;
+
+a1 = (1./k_exp).*(Csu./Css);
+b1 = (1./k_exp).*(Csv./Css);
+a2 = (1./(k_exp.^2)).*((Cuu-Cvv)./Css);
+b2 = (1./(k_exp.^2)).*(2*Cuv./Css);
+
+%Convertir dirección del oleaje a "desde"
+dir = pi;
+a1_temp = a1*cos(dir) + b1*sin(dir);
+b1_temp = -a1*sin(dir) + b1*cos(dir);
+a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
+b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
+
+a1 = a1_temp;
+b1 = b1_temp;
+a2 = a2_temp;
+b2 = b2_temp;
+
 
 %% Exportar resultados
 

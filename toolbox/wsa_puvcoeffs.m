@@ -200,46 +200,75 @@ Spu = out_Spu.I;
 Spv = out_Spv.I;
 Suv = out_Suv.I;
 
+%% Componentes reales de las densidades espectrales cruzadas
+%Partes real y de interés de las densidades espectrales cruzadas
+%   Forma: Sxy = Cxy + i*Qxy
+Cpp = real(Spp);
+Cuu = real(Suu);
+Cvv = real(Svv);
+% Cpu = real(Spu);
+% Cpv = real(Spv);
+% Cuv = real(Suv);
+
+Cpu = abs(Spu);
+Cpv = abs(Spv);
+Cuv = abs(Suv);
+
 %% Coeficientes de corrección dinámica Kp y Kc
 
+% Estimación teórica del número de onda
 f = fs*W/(2*pi);
 k = wsa_k(f, h, g);
 
 Kp = cosh(k.*(z_p+h))./cosh(k.*h);
 Kp(Kp < Kp_min) = Kp_min;         %Aplicar umbral de Kp.
-figure; plot(f, Kp);
 
-Kc = (2*pi*f).*(cosh(k.*(z_v+h))./sinh(k.*h));
-Kc(abs(Kc) < 0.1) = 0.1;         %Aplicar umbral de Kc.
-figure; plot(f, Kc);
+Kp_v = (cosh(k.*(z_v+h))./cosh(k.*h));
+Kp_v(abs(Kp_v) < Kp_min) = Kp_min;         %Aplicar umbral de Kc.
+
+%% Coeficiente de conversión de velocidad a pendientes
+
+omega = (2*pi*f);
+alpha = omega./g;
+
 %% Cálculo de los coeficientes
 %   Se calculan los primeros 4 coeficientes de la serie de Fourier de la
 %   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
 %   artículo "Observations of the Directional Spectrum of Sea Waves Using
 %   the Motions of a Floating Buoy".
 
-%Partes real y de interés de las densidades espectrales cruzadas
-%   Forma: Sxy = Cxy + i*Qxy
-Cpp = real(Spp);
-Cuu = real(Suu);
-Cvv = real(Svv);
-Cpu = real(Spu);
-Cpv = real(Spv);
-Cuv = real(Suv);
-
 Cpp = Cpp./(Kp.^2);
-Cuu = Cuu./(Kc.^2);
-Cvv = Cvv./(Kc.^2);
-Cpu = Cpu./(Kc.*Kp);
-Cpv = Cpv./(Kc.*Kp);
-Cuv = Cuv./(Kc.^2);
+Cuu = Cuu./(Kp_v.^2);
+Cvv = Cvv./(Kp_v.^2);
+Cpu = Cpu./(Kp_v.*Kp);
+Cpv = Cpv./(Kp_v.*Kp);
+Cuv = Cuv./(Kp_v.^2);
+
+k_exp = sqrt((Cuu+Cvv)./Cpp);
 
 
 %Cálculo de coeficientes
-a1 = Cpu./(sqrt(Cpp.*(Cuu+Cvv)));
-b1 = Cpv./(sqrt(Cpp.*(Cuu+Cvv)));
-a2 = (Cuu-Cvv)./(Cuu+Cvv);
-b2 = 2*Cuv./(Cuu+Cvv);
+% a1 = Cpu./(sqrt(Cpp.*(Cuu+Cvv)));
+% b1 = Cpv./(sqrt(Cpp.*(Cuu+Cvv)));
+% a2 = (Cuu-Cvv)./(Cuu+Cvv);
+% b2 = 2*Cuv./(Cuu+Cvv);
+
+a1 = (1./k_exp).*(Cpu./Cpp);
+b1 = (1./k_exp).*(Cpv./Cpp);
+a2 = (1./(k_exp.^2)).*((Cuu-Cvv)./Cpp);
+b2 = (1./(k_exp.^2)).*(2*Cuv./Cpp);
+
+%Convertir dirección del oleaje a "desde"
+dir = pi;
+a1_temp = a1*cos(dir) + b1*sin(dir);
+b1_temp = -a1*sin(dir) + b1*cos(dir);
+a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
+b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
+
+a1 = a1_temp;
+b1 = b1_temp;
+a2 = a2_temp;
+b2 = b2_temp;
 
 %% Exportar resultados
 
@@ -257,7 +286,7 @@ out.a2 = a2(W>0);
 out.b2 = b2(W>0);
 out.k = k(W>0);
 out.Kp = Kp(W>0);
-out.Kc = Kc(W>0);
+out.Kc = Kp_v(W>0);
 
 % Otras salidas que podrían ser de interés
 out.cross_spectra.W = W;
