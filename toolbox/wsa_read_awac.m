@@ -76,6 +76,8 @@ if ~isfile(file_wad)
     error('No se encontró el archivo: %s', file_wad);
 end
 
+fprintf('\nExtrayendo información de archivos .hdr, .whd y .wad.\n')
+
 %% Inicializar struct principal
 data = struct();
 data.general_info = struct();
@@ -177,6 +179,8 @@ data.general_info.general = general;
 data.general_info.setup   = setup;
 data.general_info.head_configuration = head_config;
 
+fprintf('\tInformación de archivo .hdr extraida correctamente.\n')
+
 
 %% Leer el archivo .whd
 
@@ -224,6 +228,8 @@ end
 
 data.wave_info = wave_info;
 nBursts = size(wave_info, 1);
+
+fprintf('\tInformación de archivo .whd extraida correctamente.\n')
 
 %% Leer el archivo .wad
 
@@ -279,28 +285,33 @@ end
 
 data.wave_data = wave_data;
 
-%% Verificación de integridad de los datos #1
+fprintf('\tInformación de archivo .wad extraida correctamente.\n')
+
+%% Verificación de calidad de los datos #1
 %
 % Verificaciones realizadas:
 %   -Cantidad de bursts deben coincidir en .whd y .wad.
 %   -Número de muestras de cada burst en .wad debe coincidir con el número
 %    de muestras por burst indicados en .whd.
 
+fprintf('\nComenzando verificación de calidad de los datos: tamaños\n')
 
 % Verificación de cantidad de bursts.
+fprintf('\tVerificando consistencia en cantidad de bursts...\n')
 nBursts_whd = length(data.wave_info);
 nBursts_wad = length(data.wave_data);
 burst_mismatch = false;
 if nBursts_whd ~= nBursts_wad
-    warning('Número de bursts distinto entre .whd (%d) y .wad (%d).', ...
+    fprintf('\t\tNúmero de bursts distinto entre .whd (%d) y .wad (%d).\n', ...
         nBursts_whd, nBursts_wad);
     burst_mismatch = true;
 end
 if ~burst_mismatch
-    fprintf('\nVerificación de bursts OK: la cantidad de bursts entre .whd y .wad coincide.\n\n');
+    fprintf('\t\tVerificación de bursts OK: la cantidad de bursts entre .whd y .wad coincide.\n');
 end
 
 % Verificación de número de muestras por burst.
+fprintf('\tVerificando consistencia en cantidad de muestras por burst...\n')
 minBursts = min(nBursts_whd, nBursts_wad);
 size_flag = false(nBursts,1);
 mismatch = false;
@@ -308,34 +319,35 @@ for b = 1:minBursts
     expected = data.wave_info(b).n_wave_records;
     actual   = data.wave_data(b).nSamples;
     if expected ~= actual
-        warning('Burst %d: esperado %d muestras, encontrado %d.', ...
+        fprintf('\t\tBurst %d: esperado %d muestras, encontrado %d.\n', ...
             b, expected, actual);
         size_flag(b) = true;
         mismatch = true;
     end
 end
 if ~mismatch
-    fprintf('\nVerificación de muestras OK: la cantidad de muestras de todos los bursts de .wad coincide con la esperada en .whd.\n');
+    fprintf('\t\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .wad coincide con la esperada en .whd.\n');
 end
 for b = 1:nBursts
-    data.quality_control(b).size_flag = size_flag(b);
+    data.quality_control.flags(b).size_flag = size_flag(b);
 end
 
 % Verificación temporal
+fprintf('\tVerificando existencia de desplazamientos temporales en bursts...\n')
 time_mismatch = false;
 for b = 1:minBursts
     t_whd = data.wave_info(b).datetime;
     t_wad = data.wave_data(b).datetime(1);
     dt_seconds = abs(seconds(t_wad - t_whd));
     if dt_seconds > 1   % tolerancia de 1 segundo
-        warning(['Burst %d: diferencia temporal entre .whd y .wad = %.2f s ' ...
-                 '(whd: %s | wad: %s)'], ...
+        fprintf(['\t\tBurst %d: diferencia temporal entre .whd y .wad = %.2f s ' ...
+                 '(whd: %s | wad: %s)\n'], ...
                  b, dt_seconds, string(t_whd), string(t_wad));
         time_mismatch = true;
     end 
 end
 if ~time_mismatch
-    fprintf('\nVerificación temporal OK: todos los bursts están alineados.\n');
+    fprintf('\t\tVerificación temporal OK: todos los bursts están alineados.\n');
 end
 
 
@@ -344,6 +356,7 @@ end
 %
 % Verificaciones realizadas:
 
+fprintf('\nComenzando verificación de calidad de los datos: orientación.\n')
 
 quality_control = struct();
 
@@ -351,6 +364,12 @@ pitch_limit = 10;           % grados
 roll_limit  = 10;           % grados
 heading_jump_limit = 20;    % cambio brusco entre bursts
 tilt_jump_limit    = 5;     % cambio brusco pitch/roll
+
+fprintf('\tLímites establecidos:\n')
+fprintf('\t\t-Pitch máximo: %d °\n', pitch_limit)
+fprintf('\t\t-Roll máximo: %d °\n', roll_limit)
+fprintf('\t\t-Cambio máximo en heading: %d °\n', heading_jump_limit)
+fprintf('\t\t-Cambio máximo en tilt (pitch/roll): %d °\n', tilt_jump_limit)
 
 
 
@@ -381,16 +400,19 @@ orientation_flag = bad_tilt' | bad_jump';
 
 % Guardar flags
 for b = 1:nBursts
-    data.quality_control(b).orientation_flag = orientation_flag(b);
+    data.quality_control.flags(b).orientation_flag = orientation_flag(b);
+    if orientation_flag(b)
+        fprintf('\tBurst %d presenta problemas de orientación\n', b)
+    end
 end
 
-fprintf('QC orientación: %d bursts marcados como sospechosos.\n', ...
+fprintf('\tResumen: %d bursts marcados como sospechosos.\n', ...
     sum(orientation_flag));
 
 
 
 
-
+fprintf('\nComenzando verificación de calidad de los datos: presión.\n')
 
 mean_pressure = zeros(nBursts,1);
 
@@ -404,25 +426,33 @@ median_pressure = median(mean_pressure);
 min_pressure_limit = 1;  % dbar (casi fuera del agua)
 pressure_drop_limit = 5; % dbar respecto a mediana
 
+fprintf('\tLímites establecidos:\n')
+fprintf('\t\t-Presión mínima: %d dbar\n', min_pressure_limit)
+fprintf('\t\t-Diferencia de presión respecto a la mediana: %d dbar\n', pressure_drop_limit)
+
 bad_pressure = mean_pressure < min_pressure_limit | ...
                abs(mean_pressure - median_pressure) > pressure_drop_limit;
 
 for b = 1:nBursts
-    data.quality_control(b).pressure_flag = bad_pressure(b);
+    data.quality_control.flags(b).pressure_flag = bad_pressure(b);
+    if bad_pressure(b)
+        fprintf('\tBurst %d presenta problemas de presión\n', b)
+    end
 end
 
-fprintf('QC presión: %d bursts marcados como sospechosos.\n', ...
+fprintf('\tResumen: %d bursts marcados como sospechosos.\n', ...
     sum(bad_pressure));
 
-%%
+%% Resumen
+fprintf('\nResumen de control de calidad de los datos:\n')
 
-size_flag        = [data.quality_control.size_flag]';
-orientation_flag = [data.quality_control.orientation_flag]';
-pressure_flag    = [data.quality_control.pressure_flag]';
+size_flag        = [data.quality_control.flags.size_flag]';
+orientation_flag = [data.quality_control.flags.orientation_flag]';
+pressure_flag    = [data.quality_control.flags.pressure_flag]';
 
 bad_bursts = size_flag | orientation_flag | pressure_flag;
 
-fprintf('Total bursts malos detectados: %d de %d\n', ...
+fprintf('\tTotal bursts malos detectados: %d de %d\n', ...
     sum(bad_bursts), length(bad_bursts));
 
 
@@ -461,10 +491,11 @@ end
 qc_summary.cleaning_applied = logical(clean_option);
 
 % Guardar en struct principal
-data.qc_summary = qc_summary;
+data.quality_control.summary = qc_summary;
 
 %% Limpieza de datos
 
+fprintf('\nComenzando limpieza de datos.\n')
 
 if clean_option == 1
     
@@ -477,8 +508,10 @@ if clean_option == 1
     % Actualizar número de bursts
     data.general_info.general.Number_of_measurements = sum(good_idx);
     
-    fprintf('Se eliminaron %d bursts. Quedan %d bursts válidos.\n', ...
+    fprintf('\tSe eliminaron %d bursts. Quedan %d bursts válidos.\n', ...
         sum(bad_bursts), sum(good_idx));
+else
+    fprintf('\tLimpieza de datos desactivada.\n')
 end
 
 
