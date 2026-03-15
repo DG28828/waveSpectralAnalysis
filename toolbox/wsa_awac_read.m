@@ -42,12 +42,14 @@ function data = wsa_awac_read(files_dir, varargin)
 %% Manejo de entradas
 
 %Valores por defecto
-pitch_limit_default = 10;           % grados
-roll_limit_default  = 10;           % grados
-heading_jump_limit_default = 20;    % cambio brusco entre bursts
-tilt_jump_limit_default    = 5;     % cambio brusco pitch/roll
-min_pressure_limit_default = 1;             % dbar (casi fuera del agua)
-pressure_drop_limit_default = 5;            % dbar respecto a mediana
+pitch_limit_default         = 10;    % grados
+roll_limit_default          = 10;    % grados
+heading_jump_limit_default  = 20;    % cambio brusco entre bursts
+tilt_jump_limit_default     = 5;     % cambio brusco pitch/roll
+min_pressure_limit_default  = 1;     % dbar (casi fuera del agua)
+pressure_drop_limit_default = 5;     % dbar respecto a mediana
+plot_default                = false; % No graficar por defecto
+save_plot_dir_default       = [];    % Vacio por defecto
 
 %Input parser
 p = inputParser;
@@ -63,21 +65,28 @@ addParameter(p, 'heading_jump_limit', heading_jump_limit_default)
 addParameter(p, 'tilt_jump_limit', tilt_jump_limit_default)
 addParameter(p, 'min_pressure_limit', min_pressure_limit_default)
 addParameter(p, 'pressure_drop_limit', pressure_drop_limit_default)
+addParameter(p, 'do_plot', plot_default)
+addParameter(p, 'save_plot_dir', save_plot_dir_default)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 parse(p, files_dir, varargin{:});
 
 %%%%%%%    Resultados     %%%%%%%%
-pitch_limit = p.Results.pitch_limit;        
-roll_limit  = p.Results.roll_limit;         
-heading_jump_limit = p.Results.heading_jump_limit;    
-tilt_jump_limit    = p.Results.tilt_jump_limit;
-min_pressure_limit = p.Results.min_pressure_limit;
-pressure_drop_limit  = p.Results.pressure_drop_limit;
+pitch_limit         = p.Results.pitch_limit;        
+roll_limit          = p.Results.roll_limit;         
+heading_jump_limit  = p.Results.heading_jump_limit;    
+tilt_jump_limit     = p.Results.tilt_jump_limit;
+min_pressure_limit  = p.Results.min_pressure_limit;
+pressure_drop_limit = p.Results.pressure_drop_limit;
+do_plot             = p.Results.do_plot;
+save_plot_dir       = p.Results.save_plot_dir;  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Verificaciones iniciales
 
+fprintf('\n\n========================================================================================================================\n');
+fprintf('===========================================          Lectura de AWAC         ===========================================\n');
+fprintf('\nLeer datos de archivos crudos de AWAC.\n');
 
 % Verificar que filename sea string o char
 if ~(ischar(files_dir) || isstring(files_dir))
@@ -121,16 +130,27 @@ file_hdr = fullfile(hdr_files(1).folder, hdr_files(1).name);
 file_whd = fullfile(whd_files(1).folder, whd_files(1).name);
 file_wad = fullfile(wad_files(1).folder, wad_files(1).name);
 
-fprintf('\n###############################      Lectura de AWAC      ################################\n');
-fprintf('\nLeer datos de archivos crudos de AWAC.\n');
 fprintf('\nDirectorio de los archivos crudos: %s\n', files_dir)
+
+%Si se especifica save_plot_dir automaticamente se hacen las figuras (do_plot = true)
+if ~isempty(save_plot_dir)
+    do_plot = true;
+end
+
+%Carpeta para guardar figuras en caso de requerirse
+if do_plot
+    if ~isempty(save_plot_dir)
+        if ~isfolder(save_plot_dir)
+            mkdir(save_plot_dir)
+        end
+    end
+end
 
 %% Inicializar struct principal
 data = struct();
 
 %% Leer el archivo .hdr
-
-fprintf('\n---------- Extrayendo información de archivo .hdr ... ----------\n')
+fprintf('\n-------------------------------          Extrayendo información de archivo .hdr         -------------------------------\n');
 
 data.hdr = struct();
 
@@ -350,7 +370,7 @@ end
 
 %% Leer el archivo .whd
 
-fprintf('\n---------- Extrayendo información de archivo .whd ... ----------\n')
+fprintf('\n-------------------------------          Extrayendo información de archivo .whd         -------------------------------\n');
 
 whd = load(file_whd);
 
@@ -468,7 +488,7 @@ end
 
 %% Leer el archivo .wad
 
-fprintf('\n---------- Extrayendo información de archivo .wad ... ----------\n')
+fprintf('\n-------------------------------          Extrayendo información de archivo .wad         -------------------------------\n');
 
 wad = load(file_wad);
 
@@ -613,21 +633,20 @@ data.hdr.file_paths.wad = file_wad;
 %   -Número de muestras de cada burst en .wad debe coincidir con el número
 %    de muestras por burst indicados en .whd.
 
-fprintf('\n---------- Comenzando verificación de calidad de los datos: tamaños ----------\n')
+fprintf('\n-------------------------------           Verificación del tamaño de los datos          -------------------------------\n');
 
 % Verificación de cantidad de bursts.
 fprintf('\nVerificando consistencia en cantidad de bursts...\n')
 nBursts_wad = length(data.wad);
 burst_mismatch = false;
 if nBursts_whd ~= nBursts_wad
-    fprintf('\tNúmero de bursts distinto entre .whd (%d) y .wad (%d).\n', ...
+    warning('\tNúmero de bursts distinto entre .whd (%d) y .wad (%d).\n', ...
         nBursts_whd, nBursts_wad);
     burst_mismatch = true;
 end
 if ~burst_mismatch
     fprintf('\tVerificación de bursts OK: la cantidad de bursts entre .whd y .wad coincide.\n');
 end
-
 
 for b = 1:nBursts_whd
     data.quality.flags(b).samples_flag = samples_flag(b);
@@ -649,7 +668,6 @@ for b = 1:minBursts
         mismatch = true;
     end
 end
-
 if nBursts_whd > nBursts_wad
     size_flag((minBursts + 1):nBursts_whd) = true;
     mismatch = true;
@@ -657,12 +675,46 @@ if nBursts_whd > nBursts_wad
              'Los bursts %d a %d se marcaron con size_flag.\n'], ...
              nBursts_whd - nBursts_wad, minBursts + 1, nBursts_whd);
 end
-
 if ~mismatch
     fprintf('\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .wad coincide con la esperada en .whd.\n');
 end
 for b = 1:nBursts_whd
     data.quality.flags(b).size_flag = size_flag(b);
+end
+%Graficar si se indica
+if do_plot
+    % Extraer bursts con tamaño incorrecto
+    bad_size_idx = find(size_flag(1:minBursts));
+    bad_size_burst_vec = zeros(numel(bad_size_idx),1);
+    bad_size_burst_value = zeros(numel(bad_size_idx),1);
+    for k = 1:numel(bad_size_idx)
+        b = bad_size_idx(k);
+        bad_size_burst_vec(k) = data.whd(b).burst_counter;
+        bad_size_burst_value(k) = data.wad(b).nSamples;
+    end
+    burst_counter_vec   = zeros(size(data.whd));
+    expected_vec        = zeros(size(data.whd));
+    actual_vec          = zeros(size(data.whd));
+    for i = 1:minBursts
+        burst_counter_vec(i) = data.whd(i).burst_counter;
+        expected_vec(i) = data.whd(i).n_wave_records;
+        actual_vec(i) = data.wad(i).nSamples;
+    end
+    figure('Name','Verificación de cantidad de muestras','Color','w')
+    title('Verificación de número de muestras por burst')
+    hold on
+    xlabel('Burst')
+    ylabel('Número de muestras')
+    ylim([0, max(expected_vec)+200])
+    plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.whd)')
+    plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.wad)')
+    scatter(bad_size_burst_vec, bad_size_burst_value, 10, 'filled', 'r', 'DisplayName', 'Burst marcado')
+    hold off
+    legend
+    grid on
+    if ~isempty(save_plot_dir)
+        saveas(gca, fullfile(save_plot_dir, 'verificacion_cantidad_muestras'), 'png')
+    end
 end
 
 % Verificación temporal
@@ -674,7 +726,7 @@ if has_time
         t_wad = data.wad(b).datetime(1);
         dt_seconds = abs(seconds(t_wad - t_whd));
         if dt_seconds > 1   % tolerancia de 1 segundo
-            fprintf(['\tBurst %d: diferencia temporal entre .whd y .wad = %.2f s ' ...
+            warning(['\tBurst %d: diferencia temporal entre .whd y .wad = %.2f s ' ...
                      '(whd: %s | wad: %s)\n'], ...
                      b, dt_seconds, string(t_whd), string(t_wad));
             time_mismatch = true;
@@ -693,16 +745,13 @@ end
 %
 % Verificaciones realizadas:
 
-fprintf('\n---------- Comenzando verificación de calidad de los datos: orientación ----------\n')
-
+fprintf('\n-------------------          Verificación de orientación de los datos (Heave, Pitch y Roll)         -------------------\n');
 
 fprintf('\nLímites establecidos:\n')
 fprintf('\t-Pitch máximo: %d °\n', pitch_limit)
 fprintf('\t-Roll máximo: %d °\n', roll_limit)
 fprintf('\t-Cambio máximo en heading: %d °\n', heading_jump_limit)
 fprintf('\t-Cambio máximo en tilt (pitch/roll): %d °\n\n', tilt_jump_limit)
-
-
 
 heading = [data.whd.heading_deg];
 pitch   = [data.whd.pitch_deg];
@@ -740,10 +789,86 @@ end
 fprintf('\nResumen: %d bursts marcados como sospechosos.\n', ...
     sum(orientation_flag));
 
+if do_plot
+    burst_counter_vec = [data.whd.burst_counter];
+
+    % Recalcular diferencias para graficar
+    d_heading = abs(diff(heading));
+    d_heading = min(d_heading, 360 - d_heading); % corregir wrapping
+    d_pitch   = abs(diff(pitch));
+    d_roll    = abs(diff(roll));
+
+    % Para alinear con bursts
+    d_heading_plot = [NaN, d_heading];
+    d_pitch_plot   = [NaN, d_pitch];
+    d_roll_plot    = [NaN, d_roll];
+
+    figure('Name','Verificación de orientación','Color','w')
+
+    % --- Subgráfico 1: valores absolutos ---
+    subplot(2,1,1)
+    hold on
+    title('Verificación de orientación: valores absolutos')
+    xlabel('Burst')
+    ylabel('Ángulo (°)')
+
+    plot(burst_counter_vec, heading, '-', 'DisplayName', 'Heading')
+    plot(burst_counter_vec, pitch, '-', 'DisplayName', 'Pitch')
+    plot(burst_counter_vec, roll, '-', 'DisplayName', 'Roll')
+
+    yline(pitch_limit, '--', 'DisplayName', 'Límite pitch')
+    yline(-pitch_limit, '--', 'HandleVisibility','off')
+    yline(roll_limit, ':', 'DisplayName', 'Límite roll')
+    yline(-roll_limit, ':', 'HandleVisibility','off')
+
+    % Bursts malos
+    scatter(burst_counter_vec(orientation_flag), ...
+            pitch(orientation_flag), 40, 'r', 'filled', ...
+            'DisplayName', 'Burst sospechoso')
+    scatter(burst_counter_vec(orientation_flag), ...
+            roll(orientation_flag), 40, 'r', 'filled', ...
+            'HandleVisibility','off')
+
+    hold off
+    legend('Location','best')
+    grid on
+
+    % --- Subgráfico 2: saltos entre bursts ---
+    subplot(2,1,2)
+    hold on
+    title('Verificación de orientación: cambios entre bursts')
+    xlabel('Burst')
+    ylabel('\Delta ángulo (°)')
+
+    plot(burst_counter_vec, d_heading_plot, '-', 'DisplayName', '\Delta Heading')
+    plot(burst_counter_vec, d_pitch_plot, '-', 'DisplayName', '\Delta Pitch')
+    plot(burst_counter_vec, d_roll_plot, '-', 'DisplayName', '\Delta Roll')
+
+    yline(heading_jump_limit, '--', 'DisplayName', 'Límite salto heading')
+    yline(tilt_jump_limit, ':', 'DisplayName', 'Límite salto tilt')
+
+    scatter(burst_counter_vec(orientation_flag), ...
+            d_heading_plot(orientation_flag), 40, 'r', 'filled', ...
+            'DisplayName', 'Burst marcado')
+    scatter(burst_counter_vec(orientation_flag), ...
+            d_pitch_plot(orientation_flag), 40, 'r', 'filled', ...
+            'HandleVisibility','off')
+    scatter(burst_counter_vec(orientation_flag), ...
+            d_roll_plot(orientation_flag), 40, 'r', 'filled', ...
+            'HandleVisibility','off')
+
+    hold off
+    legend('Location','best')
+    grid on
+
+    if ~isempty(save_plot_dir)
+        saveas(gca, fullfile(save_plot_dir, 'verificacion_orientacion'), 'png')
+    end
+end
 
 
 
-fprintf('\n---------- Comenzando verificación de calidad de los datos: presión ----------\n')
+fprintf('\n-----------------------------------              Verificación de presión             ----------------------------------\n');
 
 mean_pressure = NaN(nBursts_whd,1);
 
@@ -771,9 +896,41 @@ end
 fprintf('\nResumen: %d bursts marcados como sospechosos.\n', ...
     sum(bad_pressure));
 
+if do_plot
+    burst_counter_vec = [data.whd.burst_counter];
+
+    figure('Name','Verificación de presión','Color','w')
+    hold on
+    title('Verificación de presión por burst')
+    xlabel('Burst')
+    ylabel('Presión media (dbar)')
+
+    plot(burst_counter_vec, mean_pressure, '-', 'DisplayName', 'Presión media')
+
+    yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima')
+    yline(median_pressure, '-', 'DisplayName', 'Mediana')
+    yline(median_pressure + pressure_drop_limit, ':', ...
+        'DisplayName', 'Mediana + límite')
+    yline(median_pressure - pressure_drop_limit, ':', ...
+        'DisplayName', 'Mediana - límite')
+
+    scatter(burst_counter_vec(bad_pressure), ...
+            mean_pressure(bad_pressure), ...
+            40, 'r', 'filled', ...
+            'DisplayName', 'Burst marcado')
+
+    hold off
+    legend('Location','best')
+    grid on
+
+    if ~isempty(save_plot_dir)
+        saveas(gca, fullfile(save_plot_dir, 'verificacion_presion'), 'png')
+    end
+end
+
 %% Resumen
 
-fprintf('\n---------- Resumen de control de calidad de los datos: ----------\n')
+fprintf('\n----------------------------------              Resumen de verificaciones             ---------------------------------\n');
 
 samples_flag = [data.quality.flags.samples_flag]';
 size_flag        = [data.quality.flags.size_flag]';
@@ -826,6 +983,6 @@ data.hdr.general.Number_of_wave_measurements = nBursts_whd;
 
 data.cleaning_applied = false;
 
-fprintf('\n##########################################################################################\n');
+fprintf('\n========================================================================================================================\n');
 end
 

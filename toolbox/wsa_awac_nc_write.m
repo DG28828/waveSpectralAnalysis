@@ -45,6 +45,10 @@ overwrite       = p.Results.overwrite;
 
 %% Verificaciones iniciales
 
+fprintf('\n\n========================================================================================================================\n');
+fprintf('=============================          Escritura de datos de AWAC a formato netCDF         =============================\n');
+fprintf('\nEscribir datos de archivos de AWAC a formato netCDF.\n');
+
 %Verificar existencia de archivo y sobreescritura
 if exist(ncfile, 'file')
     if overwrite
@@ -382,7 +386,7 @@ end
 if isfield(data, 'cleaning')
     ncwriteatt(ncfile, '/', 'Number_of_wave_measurements', double(data.cleaning.Number_of_wave_measurements));
 else
-    ncwriteatt(ncfile, '/', 'Number_of_wave_measurements', char(string(data.hdr.general.Number_of_wave_measurements)));
+    ncwriteatt(ncfile, '/', 'Number_of_wave_measurements', double(data.hdr.general.Number_of_wave_measurements));
 end
 
 
@@ -408,5 +412,8 @@ if isfield(data, 'hdr')
     end
 end
 
+fprintf('\nArchivo escrito correctamente.\n');
+
+fprintf('\n========================================================================================================================\n');
 
 end

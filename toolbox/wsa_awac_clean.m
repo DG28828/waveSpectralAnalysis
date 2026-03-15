@@ -60,6 +60,10 @@ clean_idx = p.Results.clean_idx;
 
 %% Verificaciones iniciales
 
+fprintf('\n\n========================================================================================================================\n');
+fprintf('===========================================          Limpieza de AWAC         ===========================================\n');
+fprintf('\nLimpiar datos de archivos crudos de AWAC.\n');
+
 %Verificar si ya se hizo una limpieza
 if data.cleaning_applied
     error('Ya se ha realizado una limpieza previa de los datos ingresados, ingrese datos crudos.')
@@ -70,9 +74,6 @@ if man
         error('El modo manual de limpieza requiere que se indique los índices (bursts) a limpiar, mediante el vector clean_idx');
     end
 end
-
-fprintf('\n###############################      Limpieza de AWAC      ################################\n');
-fprintf('\nLimpiar datos de archivos crudos de AWAC.\n');
 
 %% Limpiar datos (por defecto se limpia según control de calidad de wsa_awac_read)
 data_clean = data;
@@ -116,5 +117,5 @@ end
 
 
 
-fprintf('\n##########################################################################################\n');
+fprintf('\n========================================================================================================================\n');
 end
