@@ -126,8 +126,8 @@ Kp_min_default = 0.2;
 p = inputParser;
 
 addRequired(p, 'P');
-addRequired(p, 'un');
 addRequired(p, 'fs');
+addRequired(p, 'un');
 addRequired(p, 'z_p');
 addRequired(p, 'h');
 
