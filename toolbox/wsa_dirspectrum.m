@@ -253,13 +253,17 @@ end
 S = out_spectrum.S;
 f = out_spectrum.f;
 
-%Coeficientes de la serie de Fourier
+%Espectro frecuencial (para frecuencias positivas)
+Spos = S(2:end);
+fpos = f(2:end);
+
+%Coeficientes de la serie de Fourier (definido solo para frecuencias positivas)
 d1 = out_coeffs.a1;
 d2 = out_coeffs.b1;
 d3 = out_coeffs.a2;
 d4 = out_coeffs.b2;
 
-%Función de distribución direccional
+%Función de distribución direccional (definido solo la frecuencias positivas)
 Ntheta = 180;
 [out_dirmem, info_dirmem] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
 D = out_dirmem.D;
@@ -268,33 +272,28 @@ theta = out_dirmem.theta;
 theta = theta*180/pi;   %Se convierte theta de [rad] a [°]
 D = D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
 
-% Espectro direccional (Evaluar hacer E = S(1:end-1) .* D; )
-E = zeros(size(D));
-for i = 1:length(S(1:end-1))
-    E(i, :) = S(i).*D(i, :);
-end
+% Espectro direccional
+E = Spos(:).*D;
 
-%Vector de frecuencias
-f = f(1:end-1);
 
 %Verificación energética (área bajo la curva del espectro direccional)
 S_i = zeros(size(E, 1), 1);
 for k = 1:size(E, 1)
     S_i(k) = trapz(theta, E(k, :));
 end
-m0 = trapz(f, S_i);
+m0 = trapz(fpos, S_i);
 
 %Struct para resultados
 out = struct;
-out.f = f;
+out.f = fpos;
 out.theta = theta;
 out.E = E;
 
 % Otras salidas que podrían ser de interés
-out.S = out_spectrum.S(1:end-1);
-out.D = out_dirmem.D;
+out.S = Spos;
+out.D = D;
 out.mem = out_dirmem.mem_params;
-out.mem.f = f;
+out.mem.f = fpos;
 out.coeffs = out_coeffs;
 out.coeffs.cross_spectra = out_coeffs.cross_spectra;
 
