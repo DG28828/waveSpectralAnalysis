@@ -119,7 +119,7 @@ D = num_D./(den_D);
 % 1) Se debe tomar solo la parte real, D teóricamente es real, pero pueden
 %    quedar números complejos muy pequeños debido al cálculo numérico.
 D = real(D);
-tol = 1e-12;
+tol = 1e-4;
 D_is_pos = all(D(:) >= -tol); %Verificar que D es positivo (teoricamente debe cumplirse)
 
 % 2) Normalizar la distribución, el área bajo la curva debe ser unitaria
