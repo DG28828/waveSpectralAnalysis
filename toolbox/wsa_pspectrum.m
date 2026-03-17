@@ -213,7 +213,7 @@ f = fs*W(W>=0)/(2*pi);
 
 %Validación energética:
 %   Se verifica el cumplimiento de integral_0_inf(S(f)df) = varianza
-m0 = trapz(f, Spp);       %El momento de primer orden es el área bajo la curva
+m0 = trapz(f, Spp);       %El momento de orden cero es el área bajo la curva
 varianza = var(P);     %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
 if pc
