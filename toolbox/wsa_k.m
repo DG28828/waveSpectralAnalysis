@@ -54,21 +54,41 @@ function k = wsa_k(f, h, g)
 % Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
-%Estimación de k para cada frecuencia f
-k = zeros(size(f));
-tol = 1e-5;
-iterMax = 1000;
-for i = 1:length(f)
-    omega_i = 2*pi*f(i);    %Convertir f a omega
+omega = 2*pi*f(:);
+k = zeros(size(omega));
 
-    %Caso: omega = 0:
-    if omega_i == 0
-        k(i) = 0;
-        continue
+mask = omega > 0;
+if ~any(mask)
+    return
+end
+
+w2 = omega(mask).^2;
+
+x = w2/g;   %Aproximación inicial (relación dispersión agua profunda)
+
+tol = 1e-10;
+iterMax = 100;
+
+for it = 1:iterMax
+    kh = x * h;
+    t = tanh(kh);
+    sech2 = 1 - t.^2;   % más eficiente que sech(kh).^2
+
+    % f(x) = g*x*tanh(x*h) - w^2
+    fx = g*x.*t - w2;
+
+    % f'(x) = g*(tanh(x*h) + x*h*sech^2(x*h))
+    dfx = g*(t + kh.*sech2);
+
+    dx = fx ./ dfx;
+    x_new = x - dx;
+
+    if all(abs(dx) <= tol * max(1, abs(x_new)))
+        x = x_new;
+        break
     end
+    x = x_new;
+end
+k(mask) = x;
 
-    func = @(k) omega_i^2 - g*k.*tanh(k*h);             %Función
-    dfunc = @(k) -g.*tanh(k*h) - g*k*h.*sech(k*h).^2;   %Derivada
-    k0 = omega_i^2/g;   %Aproximación inicial (relación dispersión agua profunda)
-    k(i) = wsa_newraph(func, dfunc, k0, tol, iterMax);  %Método de Newton-Raphson
 end
