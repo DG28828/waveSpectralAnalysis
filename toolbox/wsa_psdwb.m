@@ -207,9 +207,9 @@ if K~=K_default
                 N = (M - N0 + K*N0)/(K);    
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
                 if pc
-                    warning('    M = %d\n', M)
-                    warning('    N = %d\n', N)
-                    warning('    Nfft = %d\n', Nfft)
+                    fprintf('    M = %d\n', M)
+                    fprintf('    N = %d\n', N)
+                    fprintf('    Nfft = %d\n', Nfft)
                 end
             else
                 %%%%% Caso: 'K', %%%%%
@@ -247,7 +247,7 @@ else %K = K_default
     if M ~= M_new
         M = M_new; 
         if pc
-            warning('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d', M)
+            fprintf('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d\n', M)
         end
     end
     % hacer coincidir K con la relación (M-N0)/(N-N0)
@@ -255,8 +255,8 @@ else %K = K_default
         K = floor(razon);
         M = K*(N-N0) + N0;
         if pc
-            warning('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d', K)
-            warning('Se ajustó el valor de M a M = %d', M)
+            fprintf('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d\n', K)
+            fprintf('Se ajustó el valor de M a M = %d\n', M)
         end
     end
 end
@@ -272,18 +272,18 @@ if M > X_length
             error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
     else
         if pc
-            warning('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d', M)
+            fprintf('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d\n', M)
         end
     end
 elseif M < X_length
     if isempty(Y)
         if pc
-            warning('El valor de M es menor a la longitud de X, recortando los valores correspondientes de X')
+            fprintf('El valor de M es menor a la longitud de X, recortando los valores correspondientes de X\n')
         end
         X = X(1:M);
     else
         if pc
-            warning('El valor de M es menor a la longitud de X e Y, recortando los valores correspondientes de X e Y')
+            fprintf('El valor de M es menor a la longitud de X e Y, recortando los valores correspondientes de X e Y\n')
         end
         X = X(1:M);
         Y = Y(1:M);
