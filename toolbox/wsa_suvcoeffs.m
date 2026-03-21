@@ -183,7 +183,7 @@ k = wsa_k(f, h, g);
 
 %Coeficiente Kp
 Kp = (cosh(k.*(z_v+h))./cosh(k.*h));
-Kp(abs(Kp) < 0.2) = 0.2;         %Aplicar umbral de Kc.
+Kp(abs(Kp) < 0.2) = 0.2;         %Aplicar umbral de Kp.
 
 %% Coeficiente de conversión de velocidad a pendientes
 
