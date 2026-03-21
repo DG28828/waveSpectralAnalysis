@@ -177,16 +177,16 @@ end
 
 %% Cálculo principal - Parámetros del espectro total
 
-if isempty(opts.TotalBand)
+if isempty(opts.TotalBand)                                                  % Si no se especifican nuevos límites, usar completo
     f_total = f;
     S_total = S;
-    total_limits = [f(1), f(end)];
-else
+    total_limits = [f(1), f(end)];                                          
+else                                                                        % Usar nuevos limites si son especificados
     total_limits = opts.TotalBand;
     [f_total, S_total] = wsa_extract_band(f, S, total_limits);
 end
 
-main = wsa_band_parameters(f_total, S_total);
+main = wsa_band_spectral_parameters(f_total, S_total);                               % Calcular parámetros totales
 main.band_limits = total_limits;
 main.used_spectra = struct('f', f_total, 'S', S_total);
 
@@ -197,12 +197,13 @@ out_struct = main;
 out_struct.bands = struct();
 band_names = fieldnames(all_bands);
 
+%Calcular parámetros para cada banda
 for k = 1:numel(band_names)
     band_name = band_names{k};
     band_limits = all_bands.(band_name);
 
     [f_band, S_band] = wsa_extract_band(f, S, band_limits);
-    band_out = wsa_band_parameters(f_band, S_band);
+    band_out = wsa_band_spectral_parameters(f_band, S_band);                         
 
     band_out.band_limits = band_limits;
     band_out.used_spectra = struct('f', f_band, 'S', S_band);
