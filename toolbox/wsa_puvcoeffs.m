@@ -206,13 +206,13 @@ Suv = out_Suv.I;
 Cpp = real(Spp);
 Cuu = real(Suu);
 Cvv = real(Svv);
-% Cpu = real(Spu);
-% Cpv = real(Spv);
-% Cuv = real(Suv);
+Cpu = real(Spu);
+Cpv = real(Spv);
+Cuv = real(Suv);
 
-Cpu = abs(Spu);
-Cpv = abs(Spv);
-Cuv = abs(Suv);
+% Cpu = abs(Spu);
+% Cpv = abs(Spv);
+% Cuv = abs(Suv);
 
 %% Coeficientes de corrección dinámica Kp y Kc
 
@@ -258,17 +258,17 @@ b1 = (1./k_exp).*(Cpv./Cpp);
 a2 = (1./(k_exp.^2)).*((Cuu-Cvv)./Cpp);
 b2 = (1./(k_exp.^2)).*(2*Cuv./Cpp);
 
-%Convertir dirección del oleaje a "desde"
-dir = pi;
-a1_temp = a1*cos(dir) + b1*sin(dir);
-b1_temp = -a1*sin(dir) + b1*cos(dir);
-a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
-b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
-
-a1 = a1_temp;
-b1 = b1_temp;
-a2 = a2_temp;
-b2 = b2_temp;
+% %Convertir dirección del oleaje a "desde"
+% dir = pi;
+% a1_temp = a1*cos(dir) + b1*sin(dir);
+% b1_temp = -a1*sin(dir) + b1*cos(dir);
+% a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
+% b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
+% 
+% a1 = a1_temp;
+% b1 = b1_temp;
+% a2 = a2_temp;
+% b2 = b2_temp;
 
 %% Exportar resultados
 

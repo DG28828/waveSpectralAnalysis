@@ -128,10 +128,8 @@ g    = p.Results.g;
 DoF    = p.Results.DoF;
 pc     = p.Results.pc;
 
-%% Eliminar presión hidrostática y eliminar tendencias
-%   Se elimina la presión hidrostática para que la energía resultante
-%   corresponda únicamente a la presión dinámica. Para esto se resta el
-%   nivel medio de la señal de presión y se eliminan tendencias o señales
+%% Convertir AST a superficie libre y eliminar tendencias
+%   Se resta el nivel medio de la señal de presión y se eliminan tendencias o señales
 %   de muy baja frecuencia.
 S = detrend(S-mean(S));
 U = detrend(U-mean(U));
@@ -167,13 +165,21 @@ Suv = out_Suv.I;
 Css = real(Sss);
 Cuu = real(Suu);
 Cvv = real(Svv);
-% Csu = real(Ssu);
-% Csv = real(Ssv);
-% Cuv = real(Suv);
+Csu = real(Ssu);
+Csv = real(Ssv);
+Cuv = real(Suv);
 
-Csu = abs(Ssu);
-Csv = abs(Ssv);
-Cuv = abs(Suv); 
+% Csu = abs(Ssu);
+% Csv = abs(Ssv);
+% Cuv = abs(Suv); 
+
+% Csu = sign(real(Ssu)).*abs(Ssu);
+% Csv = sign(real(Ssv)).*abs(Ssv);
+% Cuv = sign(real(Suv)).*abs(Suv);
+
+% Csu = imag(Ssu);
+% Csv = imag(Ssv);
+
 
 %% Coeficientes de corrección dinámica Kp
 
@@ -195,6 +201,8 @@ alpha = omega./g;
 %   señal del oleaje de acuerdo con (Longuet-Higgins et al., 1963) en su
 %   artículo "Observations of the Directional Spectrum of Sea Waves Using
 %   the Motions of a Floating Buoy".
+
+
 
 
 Cuu = (alpha.^2).*Cuu./(Kp.^2);
@@ -223,22 +231,24 @@ k_exp = sqrt((Cuu+Cvv)./Css);
 % a2 = (Cuu-Cvv)./Css;
 % b2 = 2*Cuv./Css;
 
+
+% Convención: "hacia" ,sistema matemático: +x = Este, +y = Norte, theta contra manesillas del reloj desde +x
 a1 = (1./k_exp).*(Csu./Css);
 b1 = (1./k_exp).*(Csv./Css);
 a2 = (1./(k_exp.^2)).*((Cuu-Cvv)./Css);
 b2 = (1./(k_exp.^2)).*(2*Cuv./Css);
 
-%Convertir dirección del oleaje a "desde"
-dir = pi;
-a1_temp = a1*cos(dir) + b1*sin(dir);
-b1_temp = -a1*sin(dir) + b1*cos(dir);
-a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
-b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
-
-a1 = a1_temp;
-b1 = b1_temp;
-a2 = a2_temp;
-b2 = b2_temp;
+% %Convertir dirección del oleaje a "desde"
+% dir = pi;
+% a1_temp = a1*cos(dir) + b1*sin(dir);
+% b1_temp = -a1*sin(dir) + b1*cos(dir);
+% a2_temp = a2*cos(2*dir) + b2*sin(2*dir);
+% b2_temp = -a2*sin(2*dir) + b2*cos(2*dir);
+% 
+% a1 = a1_temp;
+% b1 = b1_temp;
+% a2 = a2_temp;
+% b2 = b2_temp;
 
 
 %% Exportar resultados
