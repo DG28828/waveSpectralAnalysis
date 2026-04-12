@@ -368,10 +368,21 @@ end
 
 I = I_acum./K;   % Periodograma promedio
 
+%% Cálculos adicionales
+
+if espectro_cruzado
+    phi_XY = unwrap(angle(I));
+end
+
+%% Guardar resultados
+
 %Struct para resultados
 out = struct;
 out.I = I;
 out.W = W;
+if espectro_cruzado
+    out.phase = phi_XY;
+end
 
 %Guardar parámetros empleados
 info = struct;
