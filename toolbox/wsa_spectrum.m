@@ -7,11 +7,18 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %   mediante el método de periodogramas medio, siguiendo la metodología de 
 %   Welch-Barlett.
 %
+%   La función permite ser utilizada de forma general para cualquier señal,
+%   cuyo espectro resultante tendrá unidades de [unidad de X]^2 / Hz.
+%   Además, permite el cálculo del espectro a partir de una señal de
+%   presión que deba ser corregida por Kp, especificando 'InputType',
+%   'pressure'.
+%
 %
 %   Sintaxis:
-%       out = wsa_spectrum(X, fs) estima el espectro de energía unilateral
-%           de la señal X, muestreada a una frecuencia fs (Hz).
-%
+%       out = wsa_spectrum(X, fs)
+%       out = wsa_spectrum(X, fs, 'InputType', 'surface')
+%       out = wsa_spectrum(X, fs, 'InputType', 'pressure', ...
+%                          'un', 'dBa', 'z_p', -0.5, 'h', 8)
 %       [out, info] = wsa_spectrum(X, fs) devuelve adicionalmente una 
 %           estructura info con los parámetros finales utilizados en el cálculo
 %           y métricas de validación energética.
@@ -26,6 +33,9 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %
 %
 %   Parámetros Nombre-Valor (opcionales):
+%       'InputType' - Tipo de datos de entrada.
+%                       'surface' | 'pressure'
+%                       Por defecto: 'surface'.
 %       'DoF'   - Grados de libertad (Degrees of Freedom) del espectro.
 %                   Entero par, mayor o igual a 2.
 %                   Por defecto: DoF = 16.
@@ -36,16 +46,44 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %                   true | false
 %                   Por defecto: false
 %
+%   Parámetros Nombre-Valor requeridos con InputType='pressure':
+%       un      - Unidad de los datos de entrada.
+%                   "dBa" | "m"
+%
+%       z_p     - Profundidad del sensor respecto al nivel medio del mar.
+%                   Escalar negativo (m).
+%                   (z_p = 0 en el nivel medio, z_p < 0 bajo la superficie)
+%
+%       h       - Profundidad del fondo marino.
+%                   Escalar positivo (m).
+%
+%   Parámetros Nombre-Valor opcionales con InputType='pressure':
+%       'g'     - Aceleración gravitacional.
+%                   Escalar positivo.
+%                   Por defecto: g = 9.81 m/s^2.
+%
+%       'rho'   - Densidad del agua.
+%                   Escalar positivo.
+%                   Por defecto: rho = 1025 kg/m^3.
+%
+%       'Kp_min' - Valor mínimo permitido para el factor de corrección
+%                   hidrodinámica Kp.
+%                   Escalar positivo.
+%                   Por defecto: Kp_min = 0.2.
 %
 %   Argumentos de salida:
 %   out         - Estructura con:
 %       S           - Estimador del espectro de energía unilateral
 %                   [unidad de X]^2 / Hz
 %       f           - Frecuencias físicas (Hz)
+%       Spp         - Espectro de energía de presión sin corregir (si InputType == "pressure")
+%       Kp          - Factor de corrección hidrodinámica          (si InputType == "pressure")
+%       k           - Número de onda asociado a cada frecuencia   (si InputType == "pressure")
 %
 %   info        - Estructura con los parámetros y métricas finales:
 %                   M, N, N0, K, Nfft, DoF, window,
-%                   fs, varianza, m0, error_relativo
+%                   fs, varianza, m0, error_relativo,
+%                   resolución espectral
 %
 %
 %   Notas:
@@ -63,13 +101,31 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %
 %     reportando el error relativo porcentual.
 %
+%   • Si las unidades de entrada son "dBa", la señal se convierte a metros
+%     de columna de agua mediante:
+%
+%         P = P / (rho·g)
+%
+%   • La corrección hidrodinámica se realiza según:
+%
+%         S = Spp / Kp^2
+%
+%     donde:
+%
+%         Kp = cosh(k(z_p + h)) / cosh(kh)
+%
+%     donde z_p es negativo y representa la posición vertical del sensor
+%     medida desde el nivel medio del mar.
+%
+%     y el número de onda k se obtiene resolviendo la ecuación de
+%     dispersión lineal.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 30/01/2026
-% Fecha de modificación: 20/02/2026
+% Fecha de modificación: 12/04/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -77,33 +133,89 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %Valores por defecto
 DoF_default = 16;
 pc_default = 0;
+InputType_default = "surface";
+g_default = 9.81;   %m's^2
+rho_default = 1025; %kg/m^3
+Kp_min_default = 0.2;
 
 %Input parser
 p = inputParser;
 
 addRequired(p, 'X');
-addRequired(p, 'fs');
+addRequired(p, 'fs', @(x) isscalar(x) && isnumeric(x) && x > 0);
 
+%Parámetros opcionales
+addParameter(p, 'InputType', InputType_default);
 addParameter(p, 'DoF', DoF_default);
 addParameter(p, 'pc',    pc_default);
+
+% Parámetros opcionales para presión
+addParameter(p, 'un', []);
+addParameter(p, 'z_p', []);
+addParameter(p, 'h', []);
+addParameter(p, 'g', g_default);
+addParameter(p, 'rho', rho_default);
+addParameter(p, 'Kp_min', Kp_min_default);
 
 parse(p, X, fs, varargin{:});
 
 %Resultados
-DoF    = p.Results.DoF;
-pc     = p.Results.pc;
+DoF       = p.Results.DoF;
+pc        = p.Results.pc;
+un        = p.Results.un;
+z_p       = p.Results.z_p;
+h         = p.Results.h;
+g         = p.Results.g;
+rho       = p.Results.rho;
+Kp_min    = p.Results.Kp_min;
+InputType  = p.Results.InputType;
 
 %% Verificaciones iniciales
 
-%Verificar eta es vector columna
-if size(X, 1) ~= length(X)
-    X = X';
+%Verificar eta es vector, luego forzar vector columna
+if ~isvector(X)
+    error('X debe ser un vector fila o columna.');
 end
+X = X(:);
 
+%Verificar que DoF indicado es entero, par, mayor o igual a 2
 if DoF ~= DoF_default
     if DoF < 2 || mod(DoF, 1) ~= 0 || mod(DoF, 2) ~= 0
         error('DoF debe ser entero, par, mayor o igual a 2')
     end
+end
+
+if InputType ~= "surface" && InputType ~= "pressure"
+    error('InputType debe ser "surface" o "pressure".');
+end
+
+%% Preprocesamiento de la señal en caso de ser Presión
+
+
+switch InputType
+    case "surface"
+        % Señal no requiere preprocesamiento
+        if ~isempty(un) || ~isempty(z_p) || ~isempty(h)
+            warning('Se especificó alguno de los parámetros "un", "z_p" o "h", pero no se indicó InputType="pressure", por lo que no se esta corrigiendo la señal por Kp.');
+        end        
+
+    case "pressure"
+        if isempty(un) || isempty(z_p) || isempty(h)
+            error('Para InputType="pressure" se debe especificar "un", "z_p" y "h".');
+        end
+
+        switch lower(string(un))
+            case "dba"
+                X = 10000*X;     % dBa -> Pa    %1dBa = 10kPa (Primero se pasa a unidades SI)
+                X = X./(rho*g);  % Pa -> m de columna de agua
+            case "m"
+                % Señal ya está en metros
+            otherwise
+                error('La unidad "un" debe ser "dBa" o "m".');
+        end
+
+        % eliminar nivel medio y tendencias
+        X = detrend(X - mean(X));
 end
 
 %% Calculo del espectro de energía
@@ -123,13 +235,14 @@ Nfft = 2^nextpow2(5*(2*length(X)/(K+1)));
 [out_pswb, info] = wsa_psdwb(X, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
 I = out_pswb.I;
 W = out_pswb.W;
-%Convertir psd bilateral a espectro unilateral y convertir 
+
+%Convertir psd bilateral a espectro unilateral *
 % Conversión:
 %   PSD bilateral: [X^2 / rad/muestra]
-%   PSD unilateral: [X^2 / rad/s] = [eta^2 / Hz]
-S = I(W>=0)/fs;   
-S(2:end) = 2*S(2:end); %La componente DC (W=0) no se duplica
-f = fs*W(W>=0)/(2*pi);
+%   PSD unilateral: [X^2 / rad/s] = [X^2 / Hz]
+S_raw = I(W>=0)/fs;             % Ajustar unidades a la frecuencia física.
+S_raw(2:end) = 2*S_raw(2:end);  % Convertir a bilateral (la componente DC W=0 no se duplica).
+f = fs*W(W>=0)/(2*pi);          %Convertir frecuencia a frecuencia física.
 
 % *Esta conversión es la siguiente:
 %       W:  frecuencia angular digital [rad/muestra]
@@ -138,22 +251,68 @@ f = fs*W(W>=0)/(2*pi);
 
 %Validación energética:
 %   Se verifica el cumplimiento de integral_0_inf(S(f)df) = varianza
-m0 = trapz(f, S);       %El momento de orden cero es el área bajo la curva
-varianza = var(X);     %Varianza de la señal de entrada
+m0 = trapz(f, S_raw);       %El momento de orden cero es el área bajo la curva
+varianza = var(X);          %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
 if pc
     fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n', m0, varianza, error_relativo)
 end
 
-%Struct para resultados
-out = struct;
-out.S = S;
+%Cálculo de resolución espectral
+delta_f = fs/info.N;
+delta_t = 1/delta_f;
+
+%Inicializar struct para guaradar salidas
+out = struct; 
 out.f = f;
+
+%% Corrección hidrodinámica (para InputType = "pressure")
+%   Se escalan los factores del espectro por el factor de corrección
+%   hidrodinámica Kp.
+%
+%   Spp = Kp^2*S  -->  S = Spp/Kp^2  ecuación (7.34) (Ochi, 1998)
+%   
+%   Kp = rho*g*(cosh(z+h))/(cosh(kh))     ecuación (7.33) (Ochi, 1998)
+%
+%   Nota: Kp es dependiente de omega
+
+% Calculo del número de onda k para cada frecuencia f, para esto se emplea
+% un método númerico para resolver la ecuación de dispersión. Se emplea la
+% función wsa_k que calcula k(f) mediante el método de NewtonRaphson.
+
+switch InputType
+    case "surface"
+        out.S = S_raw;
+
+    case "pressure"
+        k = wsa_k(f, h, g);
+        Kp = cosh(k.*(z_p + h))./cosh(k.*h);
+        Kp(Kp < Kp_min) = Kp_min;               %Aplicar umbral de Kp.
+
+        S = S_raw./(Kp.^2);
+
+        out.S = S;
+        out.Spp = S_raw;
+        out.Kp = Kp;
+        out.k = k;
+end
 
 %Agregar información adicional al struct de info
 info.fs = fs;
 info.varianza = varianza;  
 info.m0 = m0;
 info.error_relativo = error_relativo;
+info.resolution_Hz = delta_f;
+info.resolution_s = delta_t;
+info.InputType = InputType;
+
+if InputType == "pressure"
+    info.un = string(un);
+    info.z_p = z_p;
+    info.h = h;
+    info.g = g;
+    info.rho = rho;
+    info.Kp_min = Kp_min;
+end
 
 end
