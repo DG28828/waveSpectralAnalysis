@@ -1,5 +1,5 @@
-function [out, info] = wsa_dirmem(a1, b1, a2, b2, Ntheta, varargin)
-%wsa_dirmem - método de máxima entropía para distribución direccional.
+function [out, info] = wsa_dir_MEM1(a1, b1, a2, b2, Ntheta, varargin)
+%wsa_dir_MEM1 método de máxima entropía para distribución direccional MEM1 de (Lygre & Krogstad, 1986).
 %
 %   Esta función emplea el método de máxima entropía (MEM) para determinar
 %   la distribución direccional D(θ) del oleaje a partir de los primeros
@@ -91,6 +91,23 @@ function [out, info] = wsa_dirmem(a1, b1, a2, b2, Ntheta, varargin)
 % Fecha de modificación: 20/02/2026
 % -------------------------------------------------------------------------
 
+%% Verificación de posibilidad de doble pico
+% Basado en verificación de "Use of advanced directional wave spectra
+% analysis methods" (Earle et al., 1998)
+
+r1 = sqrt(a1.^2 + b1.^2);
+r2 = sqrt(a2.^2 + b2.^2);
+
+s = r1./(1-r1);
+
+r2_est = (s.*(s-1))./((s+1).*(s+2));
+
+error_r2 = abs(r2_est - r2)./abs(r2_est);
+
+if any(error_r2 <= 0.1) 
+    warning('Espectro MEM con posible doble pico.')
+end
+
 %% Cálculo de la distribución direccional
 %   Se emplea la misma notación que en (Lygre & Krogstad, 1986).
 
@@ -110,8 +127,8 @@ theta = linspace(0, 2*pi, Ntheta+1);
 theta(end) = []; %Excluir el ultimo dato porque 2pi = 0
 
 %Se calcula la distribución direccional
-num_D = (1 - phi1.*conj(C1) - phi2.*conj(C2));
-den_D = ((2*pi).*abs(1 - phi1.*exp(-1i*theta) - phi2.*exp(-2*1i*theta) ).^2); 
+num_D = 1 - phi1.*conj(C1) - phi2.*conj(C2);
+den_D = (2*pi).*abs( 1 - phi1.*exp(-1i*theta) - phi2.*exp(-2*1i*theta) ).^2; 
 D = num_D./(den_D);
 
 %%%%%%%% Operaciones finales sobre D %%%%%%%%%
@@ -127,6 +144,8 @@ for k = 1:size(D, 1)
     D(k, :) = D(k, :)./trapz(theta, D(k, :));
 end
 
+
+%% Resultados
 %Struct para resultados
 out = struct;
 out.D = D;
