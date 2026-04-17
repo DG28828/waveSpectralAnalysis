@@ -26,23 +26,23 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %
 %   Parámetros Nombre-Valor Requeridos para PUV:
 %
-%       fs      - Frecuencia de muestreo.
+%       'fs'      - Frecuencia de muestreo.
 %                   Escalar positivo [Hz].
 %
-%       un      - Unidad de la señal de presión.
+%       'un'      - Unidad de la señal de presión.
 %                   "dBa"  |  "m"
 %
-%       z_p     - Cota de medición de presión respecto al nivel medio.
+%       'z_p'     - Cota de medición de presión respecto al nivel medio.
 %                   Escalar [m].
 %                   Convención: negativo bajo el nivel medio.
 %                   Debe cumplir: -h < z_p < 0.
 %
-%       z_v     - Cota de medición de velocidades respecto al nivel medio.
+%       'z_v'     - Cota de medición de velocidades respecto al nivel medio.
 %                   Escalar [m].
 %                   Convención: negativo bajo el nivel medio.
 %                   Debe cumplir: -h < z_v < 0.
 %
-%       h       - Profundidad total del sitio.
+%       'h'       - Profundidad total del sitio.
 %                   Escalar positivo [m].
 %
 %
@@ -56,21 +56,21 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %                       Por defecto: 1025
 %
 %       'Kp_min'    - Valor mínimo permitido para el factor de corrección
-%                     dinámica de presión.
+%                     dinámica.
 %                       Escalar positivo.
 %                       Por defecto: 0.2
 %
 %   Parámetros Nombre-Valor Requeridos para SUV:
 %
-%       fs      - Frecuencia de muestreo.
+%       'fs'      - Frecuencia de muestreo.
 %                   Escalar positivo [Hz].
 %
-%       z_v     - Cota de medición de las velocidades respecto al nivel medio.
+%       'z_v'     - Cota de medición de las velocidades respecto al nivel medio.
 %                   Escalar [m].
 %                   Convención: negativo bajo el nivel medio.
 %                   Debe cumplir: -h < z <= 0.
 %
-%       h       - Profundidad total del sitio.
+%       'h'       - Profundidad total del sitio.
 %                   Escalar positivo [m].
 %
 %   Parámetros Nombre-Valor Opcionales para SUV:
@@ -79,9 +79,14 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %                   Escalar [m/s^2].
 %                   Por defecto: 9.81
 %
+%       'Kp_min'    - Valor mínimo permitido para el factor de corrección
+%                     dinámica.
+%                       Escalar positivo.
+%                       Por defecto: 0.2
+%
 %   Parámetros Nombre-Valor Opcionales:
 %
-%       ventana - Tipo de ventana a emplear.
+%       'ventana' - Tipo de ventana a emplear.
 %                   "rectangular" | "hann" | "hamming"
 %
 %       'DoF'   - Grados de libertad del estimador de Welch.
@@ -91,6 +96,33 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %       'pc'    - Print console. Muestra ajustes automáticos.
 %                   true | false
 %                   Por defecto: false
+%
+%   Argumentos de salida:
+%   out         - Estructura con:
+%       W           - Frecuencias angulares digitales [rad/muestra]
+%       a1          - Primer coeficiente de Fourier
+%       b1          - Segundo coeficiente de Fourier
+%       a2          - Tercer coeficiente de Fourier
+%       b2          - Cuarto coeficiente de Fourier
+%       cross_spectra - Struct con densidades espectrales cruzadas.
+%
+%   info        - Estructura con información auxiliar del cálculo:
+%                   info_Sss
+%                   info_Suu
+%                   info_Svv
+%                   info_Ssu
+%                   info_Ssv
+%                   info_Suv
+%
+%   Argumentos de salida adicionales para PUV:
+
+%   Notas:
+%   • Se elimina la media y la tendencia lineal de las señales antes
+%     del análisis espectral.
+%
+%   • Solo se reportan frecuencias positivas debido a la simetría del
+%     espectro de Fourier.
+%
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
@@ -267,9 +299,7 @@ f_abs = abs(f);
 %% Cálculo de coeficientes según modo
 switch InputType
     case "HPR"
-        % Según tu implementación actual:
-        % a1,b1 usan partes imaginarias de S12,S13
-        % a2,b2 usan partes reales de S23,S22,S33
+
         C11 = real(S11);
         C22 = real(S22);
         C33 = real(S33);
