@@ -41,6 +41,9 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %                   Por defecto: DoF = 16.
 %                   Se cumple que DoF = 2K.
 %
+%       ventana - Tipo de ventana a emplear.
+%                   "rectangular" | "hann" | "hamming"
+%
 %       'pc'    - Print console. Muestra en consola información de
 %                   validación energética.
 %                   true | false
@@ -133,6 +136,7 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %Valores por defecto
 DoF_default = 16;
 pc_default = 0;
+ventana_default = "hann";
 InputType_default = "surface";
 g_default = 9.81;   %m's^2
 rho_default = 1025; %kg/m^3
@@ -147,6 +151,7 @@ addRequired(p, 'fs', @(x) isscalar(x) && isnumeric(x) && x > 0);
 %Parámetros opcionales
 addParameter(p, 'InputType', InputType_default);
 addParameter(p, 'DoF', DoF_default);
+addParameter(p, 'ventana', ventana_default);
 addParameter(p, 'pc',    pc_default);
 
 % Parámetros opcionales para presión
@@ -162,6 +167,7 @@ parse(p, X, fs, varargin{:});
 %Resultados
 DoF       = p.Results.DoF;
 pc        = p.Results.pc;
+ventana   = p.Results.ventana;
 un        = p.Results.un;
 z_p       = p.Results.z_p;
 h         = p.Results.h;
@@ -228,8 +234,7 @@ end
 %   N0: Por defecto N0 = N/2, para un porcentaje de traslape del 50 % que
 %       disminuye la varainza a aproximadamente la mitad (mas traslape no dismiuye mas la varianza).
 %   Nfft: la potencia de 2 mayor mas cercana a 4 veces N.
-
-ventana = "hann";    
+   
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(X)/(K+1)));
 [out_pswb, info] = wsa_psdwb(X, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
@@ -254,9 +259,6 @@ f = fs*W(W>=0)/(2*pi);          %Convertir frecuencia a frecuencia física.
 m0 = trapz(f, S_raw);       %El momento de orden cero es el área bajo la curva
 varianza = var(X);          %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
-if pc
-    fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n', m0, varianza, error_relativo)
-end
 
 %Cálculo de resolución espectral
 delta_f = fs/info.N;
@@ -265,6 +267,10 @@ delta_t = 1/delta_f;
 %Inicializar struct para guaradar salidas
 out = struct; 
 out.f = f;
+
+if pc
+    fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n\t resolución espectral = %.6f \n', m0, varianza, error_relativo, delta_f)
+end
 
 %% Corrección hidrodinámica (para InputType = "pressure")
 %   Se escalan los factores del espectro por el factor de corrección
