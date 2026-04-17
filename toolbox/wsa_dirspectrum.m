@@ -212,39 +212,19 @@ if lower(string(method)) == "puv"
     end
 end
 
-%% Cálculo del espectro direccional
-%   Esta función llama a las siguientes funciones:
-%       - wsa_pspectrum: calcula el espectro frecuencial S(f) a partir de p
-%       - wsa_spectrum: calcula el espectro frecuencial S(f) a partir de eta
-%       - wsa_puvcoeffs: calcula los coeficientes de la serie de Fourier a1,
-%                       a2, b1, b2 a partir de p, u y v (medidas en el fondo).
-%       - wsa_hprcoeffs: calcula los coeficientes de la serie de Fourier a1,
-%                       a2, b1, b2 a partir de heave-pitch-roll (boya en superficie).
-%       - wsa_dirmem: estima la distribución direccional D(f, theta) a partir
-%                       de los coeficientes de la serie de Fourier.
-%
-%       Posteriormente, calcula E(f, theta) = S(f)*D(f, theta).
+%% Estimación del espectro frecuencial
 
 % Cálculo de S(f) y coeficientes de Fourier según método
 switch lower(string(method))
     case "puv"
         P = Z;
-        U = X;
-        V = Y;
-        [out_spectrum, info_spectrum] = wsa_pspectrum(P, fs, un, z_p, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
-        [out_coeffs, info_coeffs] = wsa_puvcoeffs(P, U, V, fs, un, z_p, z_v, h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+        [out_spectrum, info_spectrum] = wsa_spectrum(P, fs, 'InputType', "pressure", 'DoF', DoF, 'pc', pc, 'un', un, 'z_p', z_p, 'h', h, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
     case "suv"
-        S = Z; S = detrend(S-mean(S));
-        U = X;
-        V = Y;
+        S = detrend(Z-mean(Z));
         [out_spectrum, info_spectrum] = wsa_spectrum(S, fs, 'DoF', DoF, 'pc', pc);
-        [out_coeffs, info_coeffs] = wsa_suvcoeffs(S, U, V, fs, z_v, h, 'DoF', DoF, 'pc', pc);
     case "hpr"
         eta = Z;
-        d_eta_x = X;
-        d_eta_y = Y;
         [out_spectrum, info_spectrum] = wsa_spectrum(eta, fs, 'DoF', DoF, 'pc', pc);
-        [out_coeffs, info_coeffs] = wsa_hprcoeffs(eta, d_eta_x, d_eta_y,'DoF', DoF, 'pc', pc);
     otherwise
         error('Debe especificar alguno de los siguientes métodos: "PUV", "SUV", "HPR"')
 end
@@ -257,51 +237,148 @@ f = out_spectrum.f;
 Spos = S(2:end);
 fpos = f(2:end);
 
+%% Método: Serie de Fourier
+
+
+% Cálculo de coeficientes de Fourier según método
+switch lower(string(method))
+    case "puv"
+        P = Z;
+        U = X;
+        V = Y;
+        [out_coeffs, info_coeffs] = wsa_dir_coeffs(P, U, V, 'InputType', 'PUV', 'fs', fs, 'un', un,'z_p', z_p, 'z_v', z_v, 'h', h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min);
+    case "suv"
+        S = Z;
+        U = X;
+        V = Y;
+        [out_coeffs, info_coeffs] = wsa_dir_coeffs(S, U, V, 'InputType', 'SUV', 'fs', fs, 'z_v', z_v, 'h', h, 'DoF', DoF, 'pc', pc);
+    case "hpr"
+        eta = Z;
+        d_eta_x = X;
+        d_eta_y = Y;
+        [out_coeffs, info_coeffs] = wsa_dir_coeffs(eta, d_eta_x, d_eta_y, 'InputType', 'HPR','DoF', DoF, 'pc', pc); 
+    otherwise
+        error('Debe especificar alguno de los siguientes métodos: "PUV", "SUV", "HPR"')
+end
+
 %Coeficientes de la serie de Fourier (definido solo para frecuencias positivas)
-d1 = out_coeffs.a1;
-d2 = out_coeffs.b1;
-d3 = out_coeffs.a2;
-d4 = out_coeffs.b2;
+a1 = out_coeffs.a1;
+b1 = out_coeffs.b1;
+a2 = out_coeffs.a2;
+b2 = out_coeffs.b2;
+
+
+%Estimación de la función de distribución direccional
+Ntheta = 180;
+%out_Fourier = wsa_dir_TFS(a1, b1, Ntheta, a2, b2);
+out_Fourier = wsa_dir_TFS(a1, b1, Ntheta);
+
+theta = rad2deg(out_Fourier.theta);   %Se convierte theta de [rad] a [°]
+D = out_Fourier.D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
+
+% Espectro direccional
+E = Spos(:).*D;
+
+%Verificación energética (área bajo la curva del espectro direccional)
+S_i = trapz(theta, E, 2);
+m0 = trapz(fpos, S_i);
+
+% Struct con resultados
+Fourier = struct;
+Fourier.f = fpos;
+Fourier.theta = theta;
+Fourier.D = D;
+Fourier.E = E;
+Fourier.S = Spos;
+Fourier.m0 = m0;
+Fourier.coeffs = out_coeffs;
+
+%% Método: Máxima Entropía Lygre & Krogstad (MEM I)
+
+% Cálculo de coeficientes de Fourier según método
+switch lower(string(method))
+    case "puv"
+        P = Z;
+        U = X;
+        V = Y;
+        [corr_out_coeffs, info_coeffs] = wsa_dir_coeffs(P, U, V, 'InputType', 'PUV', 'fs', fs, 'un', un,'z_p', z_p, 'z_v', z_v, 'h', h, 'DoF', DoF, 'pc', pc, 'g', g, 'rho', rho, 'Kp_min', Kp_min, 'corr_flag', false);
+    case "suv"
+        S = Z; S = detrend(S-mean(S));
+        U = X;
+        V = Y;
+        [corr_out_coeffs, info_coeffs] = wsa_dir_coeffs(S, U, V, 'InputType', 'SUV', 'fs', fs, 'z_v', z_v, 'h', h, 'DoF', DoF, 'pc', pc, 'corr_flag', false);
+    case "hpr"
+        eta = Z;
+        d_eta_x = X;
+        d_eta_y = Y;
+        [corr_out_coeffs, info_coeffs] = wsa_dir_coeffs(eta, d_eta_x, d_eta_y, 'InputType', 'HPR','DoF', DoF, 'pc', pc);  %Se debe agregar correccion en caso de requerirse
+    otherwise
+        error('Debe especificar alguno de los siguientes métodos: "PUV", "SUV", "HPR"')
+end
+
+%Coeficientes con corrección de fase
+a1_corr = corr_out_coeffs.a1;
+b1_corr = corr_out_coeffs.b1;
+a2_corr = corr_out_coeffs.a2;
+b2_corr = corr_out_coeffs.b2;
 
 %Función de distribución direccional (definido solo la frecuencias positivas)
 Ntheta = 180;
-[out_dirmem, info_dirmem] = wsa_dirmem(d1, d2, d3, d4, Ntheta);
+[out_dirmem, info_dirmem] = wsa_dir_MEM1(a1_corr, b1_corr, a2_corr, b2_corr, Ntheta);
 D = out_dirmem.D;
 theta = out_dirmem.theta;
 
-theta = theta*180/pi;   %Se convierte theta de [rad] a [°]
+theta = rad2deg(theta);   %Se convierte theta de [rad] a [°]
 D = D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
 
 % Espectro direccional
 E = Spos(:).*D;
 
-
 %Verificación energética (área bajo la curva del espectro direccional)
-S_i = zeros(size(E, 1), 1);
-for k = 1:size(E, 1)
-    S_i(k) = trapz(theta, E(k, :));
-end
+S_i = trapz(theta, E, 2);
 m0 = trapz(fpos, S_i);
 
+%Recálculo de los Coeficientes de la Serie de Fourier
+theta_rad = deg2rad(theta);   % si theta está en grados
+mem_a1 = trapz(theta, E.*cos(theta_rad), 2)./Spos(:);
+mem_b1 = trapz(theta, E.*sin(theta_rad), 2)./Spos(:);
+mem_a2 = trapz(theta, E.*cos(2*theta_rad), 2)./Spos(:);
+mem_b2 = trapz(theta, E.*sin(2*theta_rad), 2)./Spos(:);
+
+mem_coeffs = struct();
+mem_coeffs.W = out_coeffs.W;
+mem_coeffs.a1 = mem_a1;
+mem_coeffs.b1 = mem_b1;
+mem_coeffs.a2 = mem_a2;
+mem_coeffs.b2 = mem_b2;
+
+% Struct con resultados
+MEM = struct;
+MEM.f = fpos;
+MEM.theta = theta;
+MEM.D = D;
+MEM.E = E;
+MEM.S = Spos;
+MEM.m0 = m0;
+MEM.C1 = out_dirmem.mem_params.C1;
+MEM.C2 = out_dirmem.mem_params.C2;
+MEM.phi1 = out_dirmem.mem_params.phi1;
+MEM.phi2 = out_dirmem.mem_params.phi2;
+MEM.coeffs = corr_out_coeffs; %Coeficientes antes de MEM
+MEM.coeffs_mem = mem_coeffs;  %Coeficientes después de MEM
+
+%% Resultados
 %Struct para resultados
 out = struct;
-out.f = fpos;
-out.theta = theta;
-out.E = E;
+out.Fourier = Fourier;
+out.MEM = MEM;
 
-% Otras salidas que podrían ser de interés
-out.S = Spos;
-out.D = D;
-out.mem = out_dirmem.mem_params;
-out.mem.f = fpos;
-out.coeffs = out_coeffs;
-out.coeffs.cross_spectra = out_coeffs.cross_spectra;
 
 % Información
 info = struct;
 info.m0 = m0;
 info.info_spectrum = info_spectrum;
-info.info_puvcoeffs = info_coeffs;
+info.info_coeffs = info_coeffs;
 info.info_dirmem = info_dirmem;
 
 end
