@@ -270,8 +270,14 @@ else                                                                        % Us
     [f_total, S_total] = wsa_extract_band(f, S, total_limits);
     [~, a1_total] = wsa_extract_band(f, a1, total_limits);
     [~, b1_total] = wsa_extract_band(f, b1, total_limits);
-    [~, a2_total] = wsa_extract_band(f, a2, total_limits);
-    [~, b2_total] = wsa_extract_band(f, b2, total_limits);
+
+    if ~isempty(a2) && ~isempty(b2)
+        [~, a2_total] = wsa_extract_band(f, a2, total_limits);
+        [~, b2_total] = wsa_extract_band(f, b2, total_limits);
+    else
+        a2_total = a2;
+        b1_total = b2;
+    end
 end
 
 main = wsa_band_directional_parameters(f_total, ...                         % Calcular parámetros totales
@@ -305,8 +311,14 @@ for k = 1:numel(band_names)
     [f_band, S_band] = wsa_extract_band(f, S, band_limits);
     [~, a1_band] = wsa_extract_band(f, a1, band_limits);
     [~, b1_band] = wsa_extract_band(f, b1, band_limits);
-    [~, a2_band] = wsa_extract_band(f, a2, band_limits);
-    [~, b2_band] = wsa_extract_band(f, b2, band_limits);
+
+    if ~isempty(a2) && ~isempty(b2)
+        [~, a2_band] = wsa_extract_band(f, a2, band_limits);
+        [~, b2_band] = wsa_extract_band(f, b2, band_limits);
+    else
+        a2_band = a2;
+        b2_band = b2;
+    end
 
     band_out = wsa_band_directional_parameters(f_band, ...                         % Calcular parámetros por banda
                                                S_band, ...
@@ -328,6 +340,9 @@ for k = 1:numel(band_names)
     valid_name = matlab.lang.makeValidName(band_name);
     out_struct.bands.(valid_name) = band_out;
 end
+
+%Agregar banda total
+out_struct.bands.total = main;
 
 %% Adicionales
 
