@@ -331,10 +331,10 @@ R = N-N0;
 
 if ~espectro_cruzado
     for r = 1:K
-    
+
         % Señal enventanada
         x_r = X((r-1)*R+1:(r-1)*R+N).*w;
-    
+
         % Periodograma
         if r == 1
             [H_r, W] = wsa_dft(x_r, Nfft);
@@ -342,16 +342,16 @@ if ~espectro_cruzado
             [H_r, ~] = wsa_dft(x_r, Nfft);
         end
         I_n = (1/(N*U))*abs(H_r).^2;
-       
+
         I_acum = I_acum + I_n;
     end
 else
     for r = 1:K
-    
+
         % Señales enventanadas
         x_r = X((r-1)*R+1:(r-1)*R+N).*w;
         y_r = Y((r-1)*R+1:(r-1)*R+N).*w;
-    
+
         % Periodogramas
         if r == 1
             [H_x_r, W] = wsa_dft(x_r, Nfft);
@@ -359,14 +359,15 @@ else
             [H_x_r, ~] = wsa_dft(x_r, Nfft);
         end
         [H_y_r, ~] = wsa_dft(y_r, Nfft);
-    
+
         I_xy_n = (1/(N*U))*conj(H_x_r).*H_y_r;
-       
+
         I_acum = I_acum + I_xy_n;
     end
 end
 
 I = I_acum./K;   % Periodograma promedio
+
 
 %% Cálculos adicionales
 
