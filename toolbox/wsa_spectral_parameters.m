@@ -212,6 +212,9 @@ for k = 1:numel(band_names)
     out_struct.bands.(valid_name) = band_out;
 end
 
+%Agregar banda total
+out_struct.bands.total = main;
+
 %% Adicionales
 
 out_struct.band_definitions = all_bands;
