@@ -45,7 +45,7 @@ function data = wsa_awac_read(files_dir, varargin)
 pitch_limit_default         = 10;    % grados
 roll_limit_default          = 10;    % grados
 heading_jump_limit_default  = 20;    % cambio brusco entre bursts
-tilt_jump_limit_default     = 5;     % cambio brusco pitch/roll
+tilt_jump_limit_default     = 5;    % cambio brusco pitch/roll
 min_pressure_limit_default  = 1;     % dbar (casi fuera del agua)
 pressure_drop_limit_default = 5;     % dbar respecto a mediana
 plot_default                = false; % No graficar por defecto
@@ -602,7 +602,7 @@ for b = 1:nBursts_wad_detected
     wave_data(b).ast_quality  = wad(idx,c_wad.ast_quality);
     wave_data(b).analog_input = wad(idx,c_wad.analog_input);
 
-    wave_data(b).velocity_ms = [ ...
+    wave_data(b).beam_velocity_ms = [ ...
         wad(idx,c_wad.vel1), ...
         wad(idx,c_wad.vel2), ...
         wad(idx,c_wad.vel3)];
@@ -700,18 +700,26 @@ if do_plot
         expected_vec(i) = data.whd(i).n_wave_records;
         actual_vec(i) = data.wad(i).nSamples;
     end
-    figure('Name','Verificación de cantidad de muestras','Color','w')
-    title('Verificación de número de muestras por burst')
+
+    f = figure('Name','Verificación de cantidad de muestras','Color','w');
+    f.Position = [1, 1, 1900, 1000];
+    t = title('Verificación de número de muestras por burst');
+    t.FontSize = 16;
     hold on
-    xlabel('Burst')
-    ylabel('Número de muestras')
+    xl = xlabel('Burst'); 
+    xl.FontSize = 14;
+    yl = ylabel('Número de muestras');
+    yl.FontSize = 14;
     ylim([0, max(expected_vec)+200])
-    plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.whd)')
-    plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.wad)')
+    plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.whd)', 'LineWidth', 2)
+    plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.wad)', 'LineWidth', 2)
     scatter(bad_size_burst_vec, bad_size_burst_value, 10, 'filled', 'r', 'DisplayName', 'Burst marcado')
     hold off
-    legend
+    l = legend;
+    l.FontSize = 12;
+    l.Location = "best";
     grid on
+
     if ~isempty(save_plot_dir)
         saveas(gca, fullfile(save_plot_dir, 'verificacion_cantidad_muestras'), 'png')
     end
@@ -761,7 +769,8 @@ roll    = [data.whd.roll_deg];
 orientation_flag = false(nBursts_whd,1);
 
 % 1) Límites absolutos
-bad_tilt = abs(pitch) > pitch_limit | abs(roll) > roll_limit;
+bad_tilt_flag = abs(pitch) > pitch_limit | abs(roll) > roll_limit;
+warning_tilt_flag = abs(pitch) > 5 | abs(roll) > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST y velocidades no serán confiables
 
 % 2) Cambios bruscos entre bursts
 d_heading = abs(diff(heading));
@@ -776,17 +785,27 @@ bad_jump = [false, ...
     d_pitch   > tilt_jump_limit    | ...
     d_roll    > tilt_jump_limit];
 
-orientation_flag = bad_tilt' | bad_jump';
+orientation_flag = bad_jump';
 
 % Guardar flags
 for b = 1:nBursts_whd
     data.quality.flags(b).orientation_flag = orientation_flag(b);
+    data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
+    data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
         fprintf('Burst %d presenta problemas de orientación\n', b)
     end
+
+    if warning_tilt_flag(b)
+        if bad_tilt_flag(b)
+            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades son inutilizables.\n', b)
+        else
+            fprintf('Burst %d presenta un tilt mayor a 5°, mediciones AST y velocidades podrían no ser confiables.\n', b)
+        end
+    end
 end
 
-fprintf('\nResumen: %d bursts marcados como sospechosos.\n', ...
+fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
     sum(orientation_flag));
 
 if do_plot
@@ -803,14 +822,15 @@ if do_plot
     d_pitch_plot   = [NaN, d_pitch];
     d_roll_plot    = [NaN, d_roll];
 
-    figure('Name','Verificación de orientación','Color','w')
+    f = figure('Name','Verificación de orientación','Color','w');
+    f.Position = [1, 1, 1900, 1000];
 
     % --- Subgráfico 1: valores absolutos ---
     subplot(2,1,1)
     hold on
-    title('Verificación de orientación: valores absolutos')
-    xlabel('Burst')
-    ylabel('Ángulo (°)')
+    t = title('Verificación de orientación: valores absolutos');
+    xl = xlabel('Burst');
+    yl = ylabel('Ángulo (°)');
 
     plot(burst_counter_vec, heading, '-', 'DisplayName', 'Heading')
     plot(burst_counter_vec, pitch, '-', 'DisplayName', 'Pitch')
@@ -824,21 +844,25 @@ if do_plot
     % Bursts malos
     scatter(burst_counter_vec(orientation_flag), ...
             pitch(orientation_flag), 40, 'r', 'filled', ...
-            'DisplayName', 'Burst sospechoso')
+            'DisplayName', 'Burst marcado')
     scatter(burst_counter_vec(orientation_flag), ...
             roll(orientation_flag), 40, 'r', 'filled', ...
             'HandleVisibility','off')
 
     hold off
-    legend('Location','best')
+    l = legend('Location','best');
     grid on
+    t.FontSize = 16;
+    xl.FontSize = 14;
+    yl.FontSize = 14;
+    l.FontSize = 12;
 
     % --- Subgráfico 2: saltos entre bursts ---
     subplot(2,1,2)
     hold on
-    title('Verificación de orientación: cambios entre bursts')
-    xlabel('Burst')
-    ylabel('\Delta ángulo (°)')
+    t = title('Verificación de orientación: cambios entre bursts');
+    xl = xlabel('Burst');
+    yl = ylabel('\Delta ángulo (°)');
 
     plot(burst_counter_vec, d_heading_plot, '-', 'DisplayName', '\Delta Heading')
     plot(burst_counter_vec, d_pitch_plot, '-', 'DisplayName', '\Delta Pitch')
@@ -858,8 +882,12 @@ if do_plot
             'HandleVisibility','off')
 
     hold off
-    legend('Location','best')
+    l = legend('Location','best');
     grid on
+    t.FontSize = 16;
+    xl.FontSize = 14;
+    yl.FontSize = 14;
+    l.FontSize = 12;
 
     if ~isempty(save_plot_dir)
         saveas(gca, fullfile(save_plot_dir, 'verificacion_orientacion'), 'png')
@@ -893,19 +921,20 @@ for b = 1:nBursts_whd
     end
 end
 
-fprintf('\nResumen: %d bursts marcados como sospechosos.\n', ...
+fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
     sum(bad_pressure));
 
 if do_plot
     burst_counter_vec = [data.whd.burst_counter];
 
-    figure('Name','Verificación de presión','Color','w')
+    f = figure('Name','Verificación de presión','Color','w');
+    f.Position = [1, 1, 1900, 1000];
     hold on
-    title('Verificación de presión por burst')
-    xlabel('Burst')
-    ylabel('Presión media (dbar)')
+    t = title('Verificación de presión media por burst');
+    xl = xlabel('Burst');
+    yl = ylabel('Presión media (dbar)');
 
-    plot(burst_counter_vec, mean_pressure, '-', 'DisplayName', 'Presión media')
+    plot(burst_counter_vec, mean_pressure, '-', 'DisplayName', 'Presión media', 'LineWidth', 1.5)
 
     yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima')
     yline(median_pressure, '-', 'DisplayName', 'Mediana')
@@ -920,8 +949,12 @@ if do_plot
             'DisplayName', 'Burst marcado')
 
     hold off
-    legend('Location','best')
+    l = legend('Location','best');
     grid on
+    t.FontSize = 16;
+    xl.FontSize = 14;
+    yl.FontSize = 14;
+    l.FontSize = 12;
 
     if ~isempty(save_plot_dir)
         saveas(gca, fullfile(save_plot_dir, 'verificacion_presion'), 'png')
