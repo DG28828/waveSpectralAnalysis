@@ -90,9 +90,11 @@ end
 % con sus respectivos tamaños.
 
 nSamples = data.hdr.setup.Wave_Number_of_samples;           % Número de muestras (number of samples)
-nVels_axes = size(data.wad(1).velocity_ms, 2);              % Número de ejes de de velocidades (number of velocities axes)
 nAst_measurements = size(data.wad(1).ast_distance_m, 2);    % Número de mediciones AST (number of AST measurements)
+nVel_beams = size(data.wad(1).beam_velocity_ms, 2);         % Número de beams apra velocidad (number of velocities beams)
 nBeams = numel(data.whd(1).noise_amp_beams);                % Número de beams (number of beams)
+naxis = 3;                                                   % Ejes coordenados del equipo (X, Y, Z)
+
 
 % Variables de whd
 time = nan(nBurst,1);
@@ -118,8 +120,8 @@ pressure_dbar = nan(nSamples, nBurst);
 ast_distance_m = nan(nSamples, nAst_measurements, nBurst);
 ast_quality = zeros(nSamples, nBurst, 'uint8');
 analog_input = zeros(nSamples, nBurst, 'uint8');
-velocity_ms = nan(nSamples, nVels_axes, nBurst);
-amplitude = zeros(nSamples, nVels_axes, nBurst, 'uint8');
+beam_velocity_ms = nan(nSamples, nVel_beams, nBurst);
+amplitude = zeros(nSamples, nVel_beams, nBurst, 'uint8');
 
 % Variables de control de calidad
 samples_flag = nan(nBurst,1);
@@ -131,6 +133,9 @@ is_bad_burst = zeros(nBurst,1,'uint8');
 %% Extraer datos
 % En esta sección se extraen los datos del struct de entrada, ya sea data
 % (raw data) o data_clean (clean data).
+
+%---------------          Datos de archivo .hdr          --------------- 
+transformation_matrix = data.hdr.head_configuration.Transformation_matrix;
 
 %Extraer datos de whd y wad
 for i = 1:nBurst
@@ -182,18 +187,18 @@ for i = 1:nBurst
     nAvail = min(nSamples, numel(tmp_ai));
     analog_input(1:nAvail, i) = tmp_ai(1:nAvail);
     
-    % velocity_ms
-    tmp_vel = double(wd.velocity_ms);
+    % beam_velocity_ms
+    tmp_vel = double(wd.beam_velocity_ms);
     [nr, nc] = size(tmp_vel);
     nr = min(nSamples, nr);
-    nc = min(nVels_axes, nc);
-    velocity_ms(1:nr, 1:nc, i) = tmp_vel(1:nr, 1:nc);
+    nc = min(nVel_beams, nc);
+    beam_velocity_ms(1:nr, 1:nc, i) = tmp_vel(1:nr, 1:nc);
     
     % amplitude
     tmp_amp = uint8(wd.amplitude);
     [nr, nc] = size(tmp_amp);
     nr = min(nSamples, nr);
-    nc = min(nVels_axes, nc);
+    nc = min(nVel_beams, nc);
     amplitude(1:nr, 1:nc, i) = tmp_amp(1:nr, 1:nc);
 end
 
@@ -246,7 +251,7 @@ vars1d_burst = {
     'sound_speed',          sound_speed_ms,     'double',   'm/s',        'sound_speed_ms';             %whd
     'heading',              heading_deg,        'double',   'degree',     'heading_deg';                %whd
     'pitch',                pitch_deg,          'double',   'degree',     'pitch_deg';                  %whd
-    'roll_deg',             roll_deg,           'double',   'degree',     'roll_deg';                   %whd
+    'roll',                 roll_deg,           'double',   'degree',     'roll_deg';                   %whd
     'min_pressure',         min_pressure_dbar,  'double',   'dbar',       'min_pressure_dbar';          %whd
     'max_pressure',         max_pressure_dbar,  'double',   'dbar',       'max_pressure_dbar';          %whd
     'temperature',          temperature_degC,   'double',   'degree_C',   'temperature_degC';           %whd
@@ -295,7 +300,7 @@ end
 
 
 
-%Variables 2D
+%-------     Variables 2D     -------
 
 % pressure(sample, burst)
 wsa_nc_create_var( ...
@@ -310,29 +315,29 @@ wsa_nc_create_var( ...
 % ast_distance(sample, ast_measurement, burst)
 wsa_nc_create_var( ...
                   ncfile, ...
-                  'ast_distance', ...
+                  'ast', ...
                   {'sample', nSamples, 'ast_measurement', nAst_measurements, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm', ...
                   'long_name', 'ast distance (m)' ...
                   );
 
-% velocity(sample, axis, burst)
+% velocity_beams(sample, vel_beam, burst)
 wsa_nc_create_var( ...
                   ncfile, ...
-                  'velocity', ...
-                  {'sample', nSamples, 'axis', nVels_axes, 'burst', nBurst}, ...
+                  'velocity_beams', ...
+                  {'sample', nSamples, 'vel_beam', nVel_beams, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm/s', ...
-                  'long_name', 'orbital velocity (m/s)', ...
-                  'description', 'Axes: (Beam 1 | X | East), (Beam 2 | Y | North), (Beam 3 | Z | Up)' ...
+                  'long_name', 'orbital velocity along beam (m/s)', ...
+                  'description', 'Axes: Beam 1, Beam 2, Beam 3' ...
                   );
 
-% amplitude(sample, axis, burst)
+% amplitude(sample, vel_beam, burst)
 wsa_nc_create_var( ...
                   ncfile, ...
                   'amplitude', ...
-                  {'sample', nSamples, 'axis', nVels_axes, 'burst', nBurst}, ...
+                  {'sample', nSamples, 'vel_beam', nVel_beams, 'burst', nBurst}, ...
                   'uint8', ...
                   'units', 'count', ...
                   'long_name', 'signal amplitude (counts)', ...
@@ -369,6 +374,16 @@ wsa_nc_create_var( ...
                   'long_name', 'analog input' ...
                   );
 
+%Transformation matrix(axis, beam)
+wsa_nc_create_var( ...
+                  ncfile, ...
+                  'transformation_matrix', ...
+                  {'axis', naxis, 'vel_beam', nVel_beams}, ...
+                  'double', ...
+                  'units', '', ...
+                  'long_name', 'Transformation matrix for velocities' ...
+                  );
+
 
 %% Escribir datos
 
@@ -396,11 +411,12 @@ end
 
 ncwrite(ncfile, 'noise_amp_beams', noise_amp_beams);
 ncwrite(ncfile, 'pressure', pressure_dbar);
-ncwrite(ncfile, 'ast_distance', ast_distance_m);
+ncwrite(ncfile, 'ast', ast_distance_m);
 ncwrite(ncfile, 'ast_quality', ast_quality);
 ncwrite(ncfile, 'analog_input', analog_input);
-ncwrite(ncfile, 'velocity', velocity_ms);
+ncwrite(ncfile, 'velocity_beams', beam_velocity_ms);
 ncwrite(ncfile, 'amplitude', amplitude);
+ncwrite(ncfile, 'transformation_matrix', transformation_matrix);
 
 %% Atributos globales
 
