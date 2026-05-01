@@ -108,6 +108,12 @@ D = zeros(nf, nt);
 
 %% Reconstruccion de D
 
+%Aplicar pesos para evitar energía negativa (Longuet-Higgins)
+a1 = (2/3)*a1;
+b1 = (2/3)*b1;
+a2 = (1/6)*a2;
+b2 = (1/6)*b2;
+
 for i = 1:nf
 
     if use_second_order
