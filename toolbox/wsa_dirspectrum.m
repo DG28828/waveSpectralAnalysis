@@ -270,8 +270,8 @@ b2 = out_coeffs.b2;
 
 %Estimación de la función de distribución direccional
 Ntheta = 180;
-%out_Fourier = wsa_dir_TFS(a1, b1, Ntheta, a2, b2);
-out_Fourier = wsa_dir_TFS(a1, b1, Ntheta);
+out_Fourier = wsa_dir_TFS(a1, b1, Ntheta, a2, b2);
+%out_Fourier = wsa_dir_TFS(a1, b1, Ntheta);
 
 theta = rad2deg(out_Fourier.theta);   %Se convierte theta de [rad] a [°]
 D = out_Fourier.D*(pi/180);         %Se convierte D de [eta^2 / Hz / rad] a [eta^2 / Hz / °]
