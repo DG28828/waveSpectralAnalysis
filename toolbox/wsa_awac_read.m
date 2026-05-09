@@ -1015,6 +1015,7 @@ data.quality.summary = qc_summary;
 data.hdr.general.Number_of_wave_measurements = nBursts_whd;
 
 data.cleaning_applied = false;
+data.preprocessing_applied = false;
 
 fprintf('\n========================================================================================================================\n');
 end
