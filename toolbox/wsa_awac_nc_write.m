@@ -90,7 +90,7 @@ end
 % con sus respectivos tamaños.
 
 nSamples = data.hdr.setup.Wave_Number_of_samples;           % Número de muestras (number of samples)
-nAst_measurements = size(data.wad(1).ast_distance_m, 2);    % Número de mediciones AST (number of AST measurements)
+nAst_sensors = size(data.wad(1).ast_distance_m, 2);    % Número de mediciones AST (number of AST measurements)
 nVel_beams = size(data.wad(1).beam_velocity_ms, 2);         % Número de beams apra velocidad (number of velocities beams)
 nBeams = numel(data.whd(1).noise_amp_beams);                % Número de beams (number of beams)
 naxis = 3;                                                   % Ejes coordenados del equipo (X, Y, Z)
@@ -117,7 +117,7 @@ ast_window_offset_m = nan(nBurst,1);
 
 % Variables de wad
 pressure_dbar = nan(nSamples, nBurst);
-ast_distance_m = nan(nSamples, nAst_measurements, nBurst);
+ast_distance_m = nan(nSamples, nAst_sensors, nBurst);
 ast_quality = zeros(nSamples, nBurst, 'uint8');
 analog_input = zeros(nSamples, nBurst, 'uint8');
 beam_velocity_ms = nan(nSamples, nVel_beams, nBurst);
@@ -128,7 +128,9 @@ samples_flag = nan(nBurst,1);
 size_flag = nan(nBurst,1);
 orientation_flag = nan(nBurst,1);
 pressure_flag = nan(nBurst,1);
-is_bad_burst = zeros(nBurst,1,'uint8');
+is_bad_burst = zeros(nBurst,1);
+bad_tilt_flag = nan(nBurst,1);
+warning_tilt_flag = nan(nBurst,1);
 
 %% Extraer datos
 % En esta sección se extraen los datos del struct de entrada, ya sea data
@@ -174,7 +176,7 @@ for i = 1:nBurst
     tmp_ast = double(wd.ast_distance_m);
     [nr, nc] = size(tmp_ast);
     nr = min(nSamples, nr);
-    nc = min(nAst_measurements, nc);
+    nc = min(nAst_sensors, nc);
     ast_distance_m(1:nr, 1:nc, i) = tmp_ast(1:nr, 1:nc);
     
     % ast_quality
@@ -212,6 +214,8 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         size_flag(i)        = wsa_get_struct_field(qf, 'size_flag');
         orientation_flag(i) = wsa_get_struct_field(qf, 'orientation_flag');
         pressure_flag(i)    = wsa_get_struct_field(qf, 'pressure_flag');
+        bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
+        warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
     end
 end
 
@@ -281,7 +285,9 @@ vars1d_burst_raw = {
     'size_flag',            size_flag,          'double',   'bool',       'size_flag';
     'orientation_flag',     orientation_flag,   'double',   'bool',       'orientation_flag';
     'pressure_flag',        pressure_flag,      'double',   'bool',       'pressure_flag';
-    'is_bad_burst',         is_bad_burst,       'uint8',    'bool',       'is_bad_burst';
+    'is_bad_burst',         is_bad_burst,       'double',   'bool',       'is_bad_burst';
+    'bad_tilt_flag',        bad_tilt_flag,      'double',   'bool',       'bad_tilt_flag';
+    'warning_tilt_flag',    warning_tilt_flag,  'double',   'bool',       'is_bad_burst';
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};
@@ -312,11 +318,11 @@ wsa_nc_create_var( ...
                   'long_name', 'pressure (dbar)' ...
                   );
 
-% ast_distance(sample, ast_measurement, burst)
+% ast_distance(sample, ast_sensor, burst)
 wsa_nc_create_var( ...
                   ncfile, ...
                   'ast', ...
-                  {'sample', nSamples, 'ast_measurement', nAst_measurements, 'burst', nBurst}, ...
+                  {'sample', nSamples, 'ast_sensor', nAst_sensors, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm', ...
                   'long_name', 'ast distance (m)' ...
@@ -439,6 +445,7 @@ else
 end
 
 ncwriteatt(ncfile, '/', 'instrument_serial', char(data.hdr.hardware_configuration.Serial_number));
+ncwriteatt(ncfile, '/', 'head_serial', char(data.hdr.head_configuration.Serial_number));
 
 
 if ~isempty(mounting_height)
@@ -451,7 +458,8 @@ ncwriteatt(ncfile, '/', 'Coordinate_system', char(data.hdr.setup.Coordinate_syst
 ncwriteatt(ncfile, '/', 'Blanking_distance_m', double(data.hdr.setup.Blanking_distance_m));
 
 
-ncwriteatt(ncfile, '/', 'cleaning_applied', double(data.cleaning_applied));
+ncwriteatt(ncfile, '/', 'cleaning_status', double(data.cleaning_applied));
+ncwriteatt(ncfile, '/', 'preprocessing_status', double(false));
 
 if isfield(data, 'cleaning')
     ncwriteatt(ncfile, '/', 'cleaning_type', char(string(data.cleaning.cleaning_type)));
@@ -490,7 +498,7 @@ if isfield(data, 'hdr')
     end
 end
 
-ncwriteatt(ncfile, '/', 'source', 'MATLAB WSA toolbox');
+ncwriteatt(ncfile, '/', 'source', 'WSA toolbox');
 
 
 fprintf('\nArchivo escrito correctamente.\n');
