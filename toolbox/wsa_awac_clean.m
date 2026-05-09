@@ -1,4 +1,4 @@
-function data_clean = wsa_awac_clean(data, varargin)
+function data_clean = wsa_awac_clean(data_in, varargin)
 %wsa_read_awac - Importa datos de AWAC.
 %
 %   AAAA
@@ -47,15 +47,34 @@ clean_idx_def = [];     %Indices de estados de mar a limpiar - ninguno por defec
 
 p = inputParser;
 
-addRequired(p, 'data');
+addRequired(p, 'data_in');
 
 addParameter(p, 'man', man_def);
 addParameter(p, 'clean_idx', clean_idx_def);
 
-parse(p, data, varargin{:});
+parse(p, data_in, varargin{:});
 
 man = p.Results.man;
 clean_idx = p.Results.clean_idx;
+
+%% Si la entrada es raw.nc, reconstruir struct data
+
+if ischar(data_in) || isstring(data_in)
+    ncfile = char(data_in);
+
+    if ~isfile(ncfile)
+        error('El archivo netCDF no existe: %s', ncfile);
+    end
+
+    fprintf('\nReconstruyendo struct data desde netCDF:\n%s\n', ncfile);
+    data = wsa_awac_nc_read_raw(ncfile);
+
+elseif isstruct(data_in)
+    data = data_in;
+
+else
+    error('La entrada debe ser un struct data o la ruta a un archivo raw.nc.');
+end
 
 
 %% Verificaciones iniciales
