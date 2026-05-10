@@ -24,9 +24,9 @@ if all(S == 0)
     out.MeanDir = NaN;
     out.MeanSpread = NaN;
     out.m0 = 0;
-    out.a1_bar = NaN;
-    out.b1_bar = NaN;
-    out.R1_bar = NaN;
+    out.a1_wa = NaN;
+    out.b1_wa = NaN;
+    out.R1_wa = NaN;
 
     if ~isempty(a2) && ~isempty(b2)
         out.dir2_mean_f = mod(rad2deg(atan2(b2, a2))/2, 360);
@@ -71,19 +71,19 @@ end
 
 % Parámetros globales ponderados energéticamente
 if m0 > 0
-    a1_bar = trapz(f, S .* a1) / m0;
-    b1_bar = trapz(f, S .* b1) / m0;
+    a1_wa = trapz(f, S .* a1) / m0;
+    b1_wa = trapz(f, S .* b1) / m0;
 
-    MeanDir = mod(rad2deg(atan2(b1_bar, a1_bar)), 360);
+    MeanDir = mod(rad2deg(atan2(b1_wa, a1_wa)), 360);
 
-    R1_bar = sqrt(a1_bar.^2 + b1_bar.^2);
-    R1_bar = min(max(R1_bar, 0), 1);
-    MeanSpread = rad2deg(sqrt(2 * (1 - R1_bar)));
+    R1_wa = sqrt(a1_wa.^2 + b1_wa.^2);
+    R1_wa = min(max(R1_wa, 0), 1);
+    MeanSpread = rad2deg(sqrt(2 * (1 - R1_wa)));
 else
-    a1_bar = NaN;
-    b1_bar = NaN;
+    a1_wa = NaN;
+    b1_wa = NaN;
     MeanDir = NaN;
-    R1_bar = NaN;
+    R1_wa = NaN;
     MeanSpread = NaN;
 end
 
@@ -97,9 +97,9 @@ out.MeanSpread = MeanSpread;
 out.f_mean_dir = f_mean_dir;
 out.f_dir_spr = f_dir_spr;
 out.m0 = m0;
-out.a1_bar = a1_bar;
-out.b1_bar = b1_bar;
-out.R1_bar = R1_bar;
+out.a1_wa = a1_wa;
+out.b1_wa = b1_wa;
+out.R1_wa = R1_wa;
 
 
 
