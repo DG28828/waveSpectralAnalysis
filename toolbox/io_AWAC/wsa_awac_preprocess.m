@@ -1,8 +1,5 @@
 function info = wsa_awac_preprocess(ncfile, varargin)
 
-%%
-%ncfile = 'C:\COPC_db\processed\Moin_Isla\2026-02_2026-03\Moin_Isla_2026-02_2026-03_clean.nc';
-
 %% Manejo de entradas
 
 ast_corr_flag_default = true;
@@ -250,7 +247,7 @@ ncwriteatt(ncfile, '/', 'processing_highpass_fc_Hz', fc);
 ncwriteatt(ncfile, '/', 'processing_highpass_order', filter_order);
 
 %Indicar que se aplicó el preprocesamiento
-ncwriteatt(ncfile, '/', 'preprocessing_applied', double(true));
+ncwriteatt(ncfile, '/', 'preprocessing_status', double(true));
 
 %% Guardar información
 

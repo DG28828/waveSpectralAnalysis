@@ -36,7 +36,7 @@ function data = wsa_awac_read(files_dir, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/03/2026
-% Fecha de modificación: 10/03/2026
+% Fecha de modificación: 15/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -1014,8 +1014,8 @@ data.quality.summary = qc_summary;
 % Guardar numero de mediciones de olas
 data.hdr.general.Number_of_wave_measurements = nBursts_whd;
 
-data.cleaning_applied = false;
-data.preprocessing_applied = false;
+data.cleaning_status = false;
+data.preprocessing_status = false;
 
 fprintf('\n========================================================================================================================\n');
 end

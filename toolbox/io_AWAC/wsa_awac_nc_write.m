@@ -458,7 +458,7 @@ ncwriteatt(ncfile, '/', 'Coordinate_system', char(data.hdr.setup.Coordinate_syst
 ncwriteatt(ncfile, '/', 'Blanking_distance_m', double(data.hdr.setup.Blanking_distance_m));
 
 
-ncwriteatt(ncfile, '/', 'cleaning_status', double(data.cleaning_applied));
+ncwriteatt(ncfile, '/', 'cleaning_status', double(data.cleaning_status));
 ncwriteatt(ncfile, '/', 'preprocessing_status', double(false));
 
 if isfield(data, 'cleaning')

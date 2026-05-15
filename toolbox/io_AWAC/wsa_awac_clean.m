@@ -36,7 +36,7 @@ function data_clean = wsa_awac_clean(data_in, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 10/03/2026
+% Fecha de modificación: 15/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -84,7 +84,7 @@ fprintf('===========================================          Limpieza de AWAC  
 fprintf('\nLimpiar datos de archivos crudos de AWAC.\n');
 
 %Verificar si ya se hizo una limpieza
-if data.cleaning_applied
+if data.cleaning_status
     error('Ya se ha realizado una limpieza previa de los datos ingresados, ingrese datos crudos.')
 end
 
@@ -125,7 +125,7 @@ data_clean.cleaning.time_start = data_clean.whd(1).datetime;
 data_clean.cleaning.time_end   = data_clean.whd(end).datetime;
 
 % Indicar que se realizó la limpieza
-data_clean.cleaning_applied = true;
+data_clean.cleaning_status = true;
 
 %Indicar tipo de limpieza realizada
 if ~man

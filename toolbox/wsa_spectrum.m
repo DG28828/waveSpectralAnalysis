@@ -224,10 +224,10 @@ switch InputType
             otherwise
                 error('La unidad "un" debe ser "dBa" o "m".');
         end
-
-        % eliminar nivel medio y tendencias
-        X = detrend(X - mean(X));
 end
+
+% eliminar nivel medio y tendencias
+X = detrend(X - mean(X));
 
 %% Calculo del espectro de energía
 % Se calcula el espectro de energía unilateral a partir de la estimación de

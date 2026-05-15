@@ -203,8 +203,8 @@ end
 
 %% Flags generales
 
-data.cleaning_applied = logical(read_att_safe(ncfile, '/', 'cleaning_applied', 0));
-data.preprocessing_applied = logical(read_att_safe(ncfile, '/', 'preprocessing_applied', 0));
+data.cleaning_status = logical(read_att_safe(ncfile, '/', 'cleaning_status', 0));
+data.preprocessing_status = logical(read_att_safe(ncfile, '/', 'preprocessing_status', 0));
 
 end
 
