@@ -1,5 +1,5 @@
-function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
-%wsa_dircoeffs - coeficientes direccionales a1, b1, a2, b2.
+function [out, info] = wsa_dir_coeffs(X1, X2, X3, fs, varargin)
+%wsa_dir_coeffs - coeficientes direccionales a1, b1, a2, b2.
 %
 %   Esta función estima los primeros cuatro coeficientes de la serie de
 %   Fourier de la función de distribución direccional del oleaje a partir 
@@ -10,9 +10,9 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %       3) HPR : heave + pitch + roll (o elevación + pendientes)
 %
 %   Sintaxis:
-%       out = wsa_dircoeffs(X1, X2, X3, 'InputType', 'HPR')
-%       out = wsa_dircoeffs(S, U, V, 'InputType', 'SUV', 'fs', fs, 'z_v', z_v, 'h', h)
-%       out = wsa_dircoeffs(P, U, V, 'InputType', 'PUV', 'fs', fs, 'un', 'dBa', 'z_p', z_p, 'z_v', z_v, 'h', h)
+%       out = wsa_dir_coeffs(X1, X2, X3, fs, 'InputType', 'HPR')
+%       out = wsa_dir_coeffs(S, U, V, fs, 'InputType', 'SUV', 'z_v', z_v, 'h', h)
+%       out = wsa_dir_coeffs(P, U, V, fs, 'InputType', 'PUV', 'un', 'dBa', 'z_p', z_p, 'z_v', z_v, 'h', h)
 %
 %   Argumentos de entrada (requeridos):
 %       X1      - Señal del oleaje con información en el eje Z vertical.
@@ -24,10 +24,11 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %       X3       - Señal del oleaje con información en el eje Y horizontal.
 %                   Vector columna o fila.
 %
-%   Parámetros Nombre-Valor Requeridos para PUV:
-%
-%       'fs'      - Frecuencia de muestreo.
+%       fs      - Frecuencia de muestreo.
 %                   Escalar positivo [Hz].
+%
+%
+%   Parámetros Nombre-Valor Requeridos para PUV:
 %
 %       'un'      - Unidad de la señal de presión.
 %                   "dBa"  |  "m"
@@ -62,9 +63,6 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %
 %   Parámetros Nombre-Valor Requeridos para SUV:
 %
-%       'fs'      - Frecuencia de muestreo.
-%                   Escalar positivo [Hz].
-%
 %       'z_v'     - Cota de medición de las velocidades respecto al nivel medio.
 %                   Escalar [m].
 %                   Convención: negativo bajo el nivel medio.
@@ -93,7 +91,7 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %                   Entero positivo.
 %                   Por defecto: 16
 %
-%       'pc'    - Print console. Muestra ajustes automáticos.
+%       'printFlag' - Bandera para imprimir. Muestra ajustes automáticos.
 %                   true | false
 %                   Por defecto: false
 %
@@ -107,15 +105,14 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 %       cross_spectra - Struct con densidades espectrales cruzadas.
 %
 %   info        - Estructura con información auxiliar del cálculo:
-%                   info_Sss
-%                   info_Suu
-%                   info_Svv
-%                   info_Ssu
-%                   info_Ssv
-%                   info_Suv
+%                   info_S11
+%                   info_S22
+%                   info_S33
+%                   info_S12
+%                   info_S13
+%                   info_S23
 %
-%   Argumentos de salida adicionales para PUV:
-
+%
 %   Notas:
 %   • Se elimina la media y la tendencia lineal de las señales antes
 %     del análisis espectral.
@@ -128,7 +125,7 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/02/2026
-% Fecha de modificación: 17/04/2026
+% Fecha de modificación: 15/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -137,8 +134,7 @@ function [out, info] = wsa_dir_coeffs(X1, X2, X3, varargin)
 InputType_default = "HPR";
 ventana_default = "hann";
 DoF_default = 16;
-pc_default = 0;
-corr_flag_default = false;
+printFlag_default = 0;
 
 g_default = 9.81;   %m's^2
 rho_default = 1025; %kg/m^3
@@ -150,14 +146,13 @@ p = inputParser;
 addRequired(p, 'X1');
 addRequired(p, 'X2');
 addRequired(p, 'X3');
+addRequired(p, 'fs');
 
 addParameter(p, 'InputType', InputType_default);
 addParameter(p, 'ventana', ventana_default);
 addParameter(p, 'DoF', DoF_default);
-addParameter(p, 'pc',    pc_default);
-addParameter(p, 'corr_flag', corr_flag_default);
+addParameter(p, 'printFlag',    printFlag_default);
 
-addParameter(p, 'fs', []);
 addParameter(p, 'un', []);
 addParameter(p, 'z_p', []);
 addParameter(p, 'z_v', []);
@@ -167,15 +162,13 @@ addParameter(p, 'rho',    rho_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
 
 
-parse(p, X1, X2, X3, varargin{:});
+parse(p, X1, X2, X3, fs, varargin{:});
 
 %Resultados
 InputType = upper(string(p.Results.InputType));
 ventana   = p.Results.ventana;
-fs        = p.Results.fs;
 DoF       = p.Results.DoF;
-pc        = p.Results.pc;
-corr_flag = p.Results.corr_flag;
+printFlag        = p.Results.printFlag;
 
 un        = p.Results.un;
 z_p       = p.Results.z_p;
@@ -277,13 +270,13 @@ end
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(X1)/(K+1)));
 
-[out_S11, info_S11] = wsa_psdwb(X1, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_S22, info_S22] = wsa_psdwb(X2, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_S33, info_S33] = wsa_psdwb(X3, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_S11, info_S11] = wsa_psdwb(X1, ventana, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
+[out_S22, info_S22] = wsa_psdwb(X2, ventana, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
+[out_S33, info_S33] = wsa_psdwb(X3, ventana, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
 
-[out_S12, info_S12] = wsa_psdwb(X1, ventana, 'Y', X2, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_S13, info_S13] = wsa_psdwb(X1, ventana, 'Y', X3, 'K', K, 'Nfft', Nfft, 'pc', pc);
-[out_S23, info_S23] = wsa_psdwb(X2, ventana, 'Y', X3, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_S12, info_S12] = wsa_psdwb(X1, ventana, 'Y', X2, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
+[out_S13, info_S13] = wsa_psdwb(X1, ventana, 'Y', X3, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
+[out_S23, info_S23] = wsa_psdwb(X2, ventana, 'Y', X3, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
 
 W   = out_S11.W;
 S11 = out_S11.I;
@@ -314,7 +307,7 @@ switch InputType
 
         k = [];
         Kp = [];
-        Kp = [];
+        Kv = [];
 
     case "SUV"
         Css = real(S11);
@@ -326,14 +319,14 @@ switch InputType
 
         k = wsa_k(f_abs, h, g);
 
-        Kp = cosh(k.*(z_v+h))./cosh(k.*h);
-        Kp(abs(Kp) < Kp_min) = Kp_min;
+        Kv = cosh(k.*(z_v+h))./cosh(k.*h);
+        Kv(abs(Kv) < Kp_min) = Kp_min;
 
-        Cuu = Cuu./(Kp.^2);
-        Cvv = Cvv./(Kp.^2);
-        Csu = Csu./Kp;
-        Csv = Csv./Kp;
-        Cuv = Cuv./(Kp.^2);
+        Cuu = Cuu./(Kv.^2);
+        Cvv = Cvv./(Kv.^2);
+        Csu = Csu./Kv;
+        Csv = Csv./Kv;
+        Cuv = Cuv./(Kv.^2);
 
         Kexp = sqrt((Cuu + Cvv)./Css);
 
@@ -342,7 +335,7 @@ switch InputType
         a2 = (1./(Kexp.^2)).*((Cuu - Cvv)./Css);
         b2 = (1./(Kexp.^2)).*(2*Cuv./Css);
 
-        %Kp = [];
+        Kp = [];
         
     case "PUV"
         Cpp = real(S11);
@@ -352,20 +345,20 @@ switch InputType
         Cpv = real(S13);
         Cuv = real(S23);
 
-        k = wsa_k(f, h, g);
+        k = wsa_k(f_abs, h, g);
 
         Kp = cosh(k.*(z_p+h))./cosh(k.*h);
-        Kp(Kp < Kp_min) = Kp_min;
-
-        Kp = cosh(k.*(z_v+h))./cosh(k.*h);
         Kp(abs(Kp) < Kp_min) = Kp_min;
 
+        Kv = cosh(k.*(z_v+h))./cosh(k.*h);
+        Kv(abs(Kv) < Kp_min) = Kp_min;
+
         Cpp = Cpp./(Kp.^2);
-        Cuu = Cuu./(Kp.^2);
-        Cvv = Cvv./(Kp.^2);
-        Cpu = Cpu./(Kp.*Kp);
-        Cpv = Cpv./(Kp.*Kp);
-        Cuv = Cuv./(Kp.^2);
+        Cuu = Cuu./(Kv.^2);
+        Cvv = Cvv./(Kv.^2);
+        Cpu = Cpu./(Kp.*Kv);
+        Cpv = Cpv./(Kp.*Kv);
+        Cuv = Cuv./(Kv.^2);
 
         k_exp = sqrt((Cuu + Cvv)./Cpp);
 
@@ -393,9 +386,9 @@ end
 if ~isempty(Kp)
     out.Kp = Kp(idx_pos);
 end
-% if ~isempty(Kc)
-%     out.Kc = Kc(idx_pos);
-% end
+if ~isempty(Kv)
+    out.Kv = Kv(idx_pos);
+end
 
 out.cross_spectra.W = W;
 out.cross_spectra.S11 = S11;
@@ -404,9 +397,6 @@ out.cross_spectra.S33 = S33;
 out.cross_spectra.S12 = S12;
 out.cross_spectra.S13 = S13;
 out.cross_spectra.S23 = S23;
-out.cross_spectra.S12_corr = S12;
-out.cross_spectra.S13_corr = S13;
-out.cross_spectra.S23_corr = S23;
 
 info = struct;
 info.info_S11 = info_S11;
@@ -415,7 +405,6 @@ info.info_S33 = info_S33;
 info.info_S12 = info_S12;
 info.info_S13 = info_S13;
 info.info_S23 = info_S23;
-%info.phase_correction = diag_corr;
 
 
 

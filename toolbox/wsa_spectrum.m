@@ -4,7 +4,7 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %   Esta función estima el espectro de energía de una secuencia de 
 %   datos (X). El espectro calculado corresponde a la densidad espectral 
 %   de potencia unilateral (frecuencias positivas). El espectro se calcula 
-%   mediante el método de periodogramas medio, siguiendo la metodología de 
+%   mediante el método de periodograma medio, siguiendo la metodología de 
 %   Welch-Barlett.
 %
 %   La función permite ser utilizada de forma general para cualquier señal,
@@ -17,8 +17,7 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %   Sintaxis:
 %       out = wsa_spectrum(X, fs)
 %       out = wsa_spectrum(X, fs, 'InputType', 'surface')
-%       out = wsa_spectrum(X, fs, 'InputType', 'pressure', ...
-%                          'un', 'dBa', 'z_p', -0.5, 'h', 8)
+%       out = wsa_spectrum(X, fs, 'InputType', 'pressure', 'un', 'dBa', 'z_p', -0.5, 'h', 8)
 %       [out, info] = wsa_spectrum(X, fs) devuelve adicionalmente una 
 %           estructura info con los parámetros finales utilizados en el cálculo
 %           y métricas de validación energética.
@@ -36,15 +35,16 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %       'InputType' - Tipo de datos de entrada.
 %                       'surface' | 'pressure'
 %                       Por defecto: 'surface'.
+%
 %       'DoF'   - Grados de libertad (Degrees of Freedom) del espectro.
 %                   Entero par, mayor o igual a 2.
 %                   Por defecto: DoF = 16.
 %                   Se cumple que DoF = 2K.
 %
-%       ventana - Tipo de ventana a emplear.
+%       window - Tipo de ventana a emplear.
 %                   "rectangular" | "hann" | "hamming"
 %
-%       'pc'    - Print console. Muestra en consola información de
+%       'printFlag' - Bandera para imprimir. Muestra información de
 %                   validación energética.
 %                   true | false
 %                   Por defecto: false
@@ -91,13 +91,19 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %
 %   Notas:
 %   • El espectro se obtiene a partir de la PSD bilateral estimada
-%     mediante WSA_PSDWB, empleando ventana Hann y un traslape del 50 %%.
-%   • La conversión de PSD bilateral [X^2 / rad/muestra] a espectro
+%     mediante la función wsa_psdwb.m, empleando ventana Hann y un traslape del 50 %.
+%
+%   • El tamaño de la FFT se define como la potencia de 2 mas cercana a 5
+%     veces N (tamaño del segmento enventanado, para mejorar la interpolación
+%     del espectro resultante.
+%
+%   • La conversión de PSD bilateral [X^2 / rad / muestra] a espectro
 %     unilateral [X^2 / Hz] se realiza considerando:
 %
 %         f = fs·W / (2π)
 %
 %     y duplicando todas las componentes excepto la frecuencia cero.
+%
 %   • Se realiza una validación energética verificando que:
 %
 %         ∫_0^∞ S(f) df ≈ var(X)
@@ -115,28 +121,26 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %
 %     donde:
 %
-%         Kp = cosh(k(z_p + h)) / cosh(kh)
+%         Kp = cosh(k(z_p + h))/cosh(kh)
 %
 %     donde z_p es negativo y representa la posición vertical del sensor
-%     medida desde el nivel medio del mar.
-%
-%     y el número de onda k se obtiene resolviendo la ecuación de
-%     dispersión lineal.
+%     medida desde el nivel medio del mar y el número de onda k se obtiene 
+%     resolviendo la ecuación de dispersión lineal.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 30/01/2026
-% Fecha de modificación: 12/04/2026
+% Fecha de modificación: 15/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
 
 %Valores por defecto
 DoF_default = 16;
-pc_default = 0;
-ventana_default = "hann";
+printFlag_default = 0;
+window_default = "hann";
 InputType_default = "surface";
 g_default = 9.81;   %m's^2
 rho_default = 1025; %kg/m^3
@@ -151,8 +155,8 @@ addRequired(p, 'fs', @(x) isscalar(x) && isnumeric(x) && x > 0);
 %Parámetros opcionales
 addParameter(p, 'InputType', InputType_default);
 addParameter(p, 'DoF', DoF_default);
-addParameter(p, 'ventana', ventana_default);
-addParameter(p, 'pc',    pc_default);
+addParameter(p, 'window', window_default);
+addParameter(p, 'printFlag',    printFlag_default);
 
 % Parámetros opcionales para presión
 addParameter(p, 'un', []);
@@ -166,8 +170,8 @@ parse(p, X, fs, varargin{:});
 
 %Resultados
 DoF       = p.Results.DoF;
-pc        = p.Results.pc;
-ventana   = p.Results.ventana;
+printFlag        = p.Results.printFlag;
+window   = p.Results.window;
 un        = p.Results.un;
 z_p       = p.Results.z_p;
 h         = p.Results.h;
@@ -191,6 +195,7 @@ if DoF ~= DoF_default
     end
 end
 
+InputType = string(InputType);
 if InputType ~= "surface" && InputType ~= "pressure"
     error('InputType debe ser "surface" o "pressure".');
 end
@@ -207,7 +212,7 @@ switch InputType
 
     case "pressure"
         if isempty(un) || isempty(z_p) || isempty(h)
-            error('Para InputType="pressure" se debe especificar "un", "z_p" y "h".');
+            error('Para InputType="pressure" se requieren "un", "z_p" y "h".');
         end
 
         switch lower(string(un))
@@ -228,25 +233,25 @@ end
 % Se calcula el espectro de energía unilateral a partir de la estimación de
 % densidad de potencia mediante el método de Welch-Barlett. Los parámetros
 % empleados son:
-%   ventana: Von Hann
+%   window: Von Hann
 %   K: tal que cumpla con los DoF. Por defecto K = 8 (Recordar DoF = 2K)
 %   N: Por defecto N = 2*M/(K+1) para N0 = N/2
 %   N0: Por defecto N0 = N/2, para un porcentaje de traslape del 50 % que
-%       disminuye la varainza a aproximadamente la mitad (mas traslape no dismiuye mas la varianza).
-%   Nfft: la potencia de 2 mayor mas cercana a 4 veces N.
+%       disminuye la varainza a aproximadamente la mitad (mas traslape no disminuye mas la varianza).
+%   Nfft: la potencia de 2 mayor mas cercana a 5 veces N.
    
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(X)/(K+1)));
-[out_pswb, info] = wsa_psdwb(X, ventana, 'K', K, 'Nfft', Nfft, 'pc', pc);
+[out_pswb, info_psd] = wsa_psdwb(X, window, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
 I = out_pswb.I;
 W = out_pswb.W;
 
-%Convertir psd bilateral a espectro unilateral *
+%Convertir psd bilateral a espectro unilateral
 % Conversión:
 %   PSD bilateral: [X^2 / rad/muestra]
 %   PSD unilateral: [X^2 / rad/s] = [X^2 / Hz]
 S_raw = I(W>=0)/fs;             % Ajustar unidades a la frecuencia física.
-S_raw(2:end) = 2*S_raw(2:end);  % Convertir a bilateral (la componente DC W=0 no se duplica).
+S_raw(2:end) = 2*S_raw(2:end);  % Convertir a unilateral (la componente DC W=0 no se duplica).
 f = fs*W(W>=0)/(2*pi);          %Convertir frecuencia a frecuencia física.
 
 % *Esta conversión es la siguiente:
@@ -261,14 +266,15 @@ varianza = var(X);          %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
 
 %Cálculo de resolución espectral
-delta_f = fs/info.N;
+delta_f = fs/info_psd.N;
 delta_t = 1/delta_f;
 
 %Inicializar struct para guaradar salidas
 out = struct; 
 out.f = f;
+info = info_psd;
 
-if pc
+if printFlag
     fprintf('Validación energética:\n\t m0 = %.4f (área bajo la curva) \n\t varianza señal = %.4f \n\t error relativo = %.2f %%\n\t resolución espectral = %.6f \n', m0, varianza, error_relativo, delta_f)
 end
 

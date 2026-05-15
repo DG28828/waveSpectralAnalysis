@@ -1,6 +1,19 @@
 function out_struct = wsa_spectral_parameters(arg1, arg2, varargin)
 %wsa_spectral_parameters - calcula parámetros espectrales de oleaje
 %
+%   Esta función calcula los parámetros espectrales del oleaje a partir de
+%   un espectro de energía. Los parámetros se calculan tanto para el
+%   espectro completo, como para las bandas de frecuencia definidas por
+%   defecto. También permite el cálculo de bandas personalizadas.
+%
+%   Bandas por defecto:
+%       ig     : [1/300, 1/30] Hz
+%       swell1 : [1/30, 1/12.5] Hz
+%       swell2 : [1/12.5, 1/8] Hz
+%       swell  : [1/30, 1/8] Hz
+%       wind   : [1/8, 1/2] Hz
+%
+%
 %   Sintaxis:
 %       out = wsa_spectral_parameters(f, S)
 %       out = wsa_spectral_parameters(spec)
@@ -20,12 +33,15 @@ function out_struct = wsa_spectral_parameters(arg1, arg2, varargin)
 %   Parámetros nombre-valor:
 %       'TotalBand'           : [fmin fmax] para limitar el cálculo principal
 %                               (por defecto usa todo el espectro)
+%
 %       'Bands'               : struct con bandas por defecto redefinidas
 %                               Ejemplo:
 %                               struct('ig',[1/300 1/30], 'wind',[1/8 1/5])
+%
 %       'CustomBands'         : struct con bandas adicionales personalizadas
 %                               Ejemplo:
-%                               struct('sea',[0.10 0.20], 'lowfreq',[0.03 0.07])
+%                               struct('band1',[0.10 0.20], 'band2',[0.03 0.07])
+%
 %       'IncludeDefaultBands' : true/false, incluye o no las bandas por defecto
 %
 %   Salida:
@@ -61,7 +77,7 @@ if isstruct(arg1)
     end
 
 else
-    %Caso en que el insput son 2 entradas: f y S
+    %Caso en que el input son 2 entradas: f y S
 
     if nargin < 2
         error(['Si no se usa un struct de entrada, deben proporcionarse ', ...

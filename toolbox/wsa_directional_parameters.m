@@ -5,6 +5,18 @@ function out_struct = wsa_directional_parameters(arg1, varargin)
 %   coeficientes de Fourier de la distribución direccional:
 %   a1(f), b1(f). Opcionalmente acepta también a2(f), b2(f).
 %
+%   Los parámetros se calculan tanto para el espectro completo, como para 
+%   las bandas de frecuencia definidas por defecto. También permite el 
+%   cálculo de bandas personalizadas.
+%
+%   Bandas por defecto:
+%       ig     : [1/300, 1/30] Hz
+%       swell1 : [1/30, 1/12.5] Hz
+%       swell2 : [1/12.5, 1/8] Hz
+%       swell  : [1/30, 1/8] Hz
+%       wind   : [1/8, 1/2] Hz
+%
+%
 %   Sintaxis:
 %       out = wsa_directional_parameters(dirspec)
 %       out = wsa_directional_parameters(f, S, a1, b1)
@@ -37,11 +49,23 @@ function out_struct = wsa_directional_parameters(arg1, varargin)
 %
 %   Salida:
 %       out_struct con:
-%           fp, Tp
-%           DirTp, SprTp
-%           MeanDir, MeanSpread
-%           dir_mean_f, spread_f
-%           out_struct.bands.<nombre_banda>
+%           fp
+%           Tp
+%           DirTp
+%           SprTp
+%           MeanDir
+%           MeanSpread
+%           f_mean_dir          (vector de direcciones medias para cada frecuencia)
+%           f_dir_spr           (vector de spread direccional para cada frecuencia)
+%           m0
+%           band_limits
+%           used_spectra
+%           bands.<nombre_banda> (struct con parámetros)
+%           band_definitions     (struct con definición de las bandas)
+%           total_band_definition
+%           source_spectra       (struct con el espectro y coeficientes de entrada)
+%           
+%           
 %
 %
 
@@ -173,6 +197,10 @@ if ~isempty(b2)
     b2 = b2(:);
 end
 
+if xor(isempty(a2), isempty(b2))
+    error('a2 y b2 deben especificarse conjuntamente.');
+end
+
 if numel(f) ~= numel(S) || numel(f) ~= numel(a1) || numel(f) ~= numel(b1)
     error('f, S, a1 y b1 deben tener la misma cantidad de elementos.');
 end
@@ -216,7 +244,7 @@ default_bands = struct( ...
                         'swell1', [1/30, 1/12.5], ...
                         'swell2', [1/12.5, 1/8], ...
                         'swell', [1/30, 1/8], ...
-                        'wind', [1/8, 1/5] ...
+                        'wind', [1/8, 1/2] ...
                         );
 
 %Guardar bandas por defecto
@@ -276,7 +304,7 @@ else                                                                        % Us
         [~, b2_total] = wsa_extract_band(f, b2, total_limits);
     else
         a2_total = a2;
-        b1_total = b2;
+        b2_total = b2;
     end
 end
 

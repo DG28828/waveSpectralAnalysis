@@ -1,21 +1,21 @@
-function [out, info] = wsa_psdwb(X, ventana, varargin)
-%wsa_psdwb - densidad espectral de potencia mediante el método de Welch-Barlett.
+function [out, info] = wsa_psdwb(X, window, varargin)
+%wsa_psdwb - densidad espectral de potencia mediante el método de Welch-Bartlett.
 %
 %   Esta función realiza la estimación de la densidad espectral de potencia 
-%   de X mediante el método de Welch-Barlett.
+%   de X mediante el método de Welch-Bartlett.
 %   Si se especifica Y, se calcula la densidad espectral de potencia cruzada 
 %   de X e Y. La convención empleada para la densidad espectral de potencia
 %   cruzada es la dada por (Ochi, 1998).
 %                           
 %
 %   Sintaxis:
-%       out = wsa_psdwb(X, ventana) estima la densidad espectral de potencia
-%           (PSD) de la señal X utilizando el método de Welch-Barlett.
+%       out = wsa_psdwb(X, window) estima la densidad espectral de potencia
+%           (PSD) de la señal X utilizando el método de Welch-Bartlett.
 %
-%       [out, info] = wsa_psdwb(X, ventana) devuelve adicionalmente una estructura
+%       [out, info] = wsa_psdwb(X, window) devuelve adicionalmente una estructura
 %           info con los parámetros finales utilizados en el cálculo.
 %
-%       out = wsa_psdwb(X, ventana, 'Y', Y) estima la densidad espectral de potencia
+%       out = wsa_psdwb(X, window, 'Y', Y) estima la densidad espectral de potencia
 %           cruzada entre X e Y. La convención empleada es:
 %
 %                       I_xy[k] = conj(X[k]) · Y[k]
@@ -27,7 +27,7 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 %       X       - Señal de entrada.
 %                   Vector columna o fila.
 %
-%       ventana - Tipo de ventana a emplear.
+%       window - Tipo de ventana a emplear.
 %                   "rectangular" | "hann" | "hamming"
 %
 %
@@ -38,7 +38,7 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 %
 %       'N0'    - Longitud del solapamiento entre segmentos.
 %                   Entero.
-%                   Por defecto: N0 = N/2  (50%%)
+%                   Por defecto: N0 = N/2  (50%)
 %
 %       'M'     - Longitud efectiva de la secuencia.
 %                   Entero.
@@ -57,8 +57,7 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 %                   Vector del mismo tamaño que X.
 %                   Por defecto: []
 %
-%       'pc'    - Print console. Muestra en consola los ajustes
-%               automáticos de parámetros.
+%       'printFlag' - Bandera para imprimir. Muestra los ajustes automáticos de parámetros.
 %                   true | false
 %                   Por defecto: false
 %
@@ -87,7 +86,7 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 28/01/2026
-% Fecha de modificación: 20/02/2026
+% Fecha de modificación: 15/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -96,20 +95,24 @@ function [out, info] = wsa_psdwb(X, ventana, varargin)
 M_default = length(X);                          %Por defecto M es la longitud de X
 K_default = 8;                                  %Por defecto K = 8 para que sean 16 GDL
 M_new = M_default;
-while mod(2*M_new/(K_default+1), 1) ~= 0
-    M_new = M_new-1;
+while true                                      %Este ciclo asegura N entero par
+    N_i = 2*M_new/(K_default+1);
+    if mod(N_i,1)==0 && mod(N_i,2)==0
+        break
+    end
+    M_new = M_new - 1;
 end
 M_default = M_new;                              %Modificar M para que N = 2M/(K+1) sea entero
 N_default = 2*M_default/(K_default+1);          %N = 2M/(K+1) hace que K = (M-N0)/(N-N0) sea entero cuando N0 = N/2
 N0_default = N_default/2;                       %Hacer que N0 = N/2
 Nfft_default = max(512, 2^nextpow2(N_default));
-pc_default = 0;
+printFlag_default = 0;
 
 %Input parser
 p = inputParser;
 
 addRequired(p, 'X');
-addRequired(p, 'ventana');
+addRequired(p, 'window');
 
 addParameter(p, 'N', N_default);
 addParameter(p, 'N0', N0_default);
@@ -117,9 +120,9 @@ addParameter(p, 'M',    M_default);
 addParameter(p, 'K',    K_default);
 addParameter(p, 'Nfft', Nfft_default);
 addParameter(p, 'Y',    []);
-addParameter(p, 'pc',    pc_default);
+addParameter(p, 'printFlag',    printFlag_default);
 
-parse(p, X, ventana, varargin{:});
+parse(p, X, window, varargin{:});
 
 %Resultados
 M    = p.Results.M;
@@ -128,7 +131,7 @@ N0   = p.Results.N0;
 K    = p.Results.K;
 Nfft = p.Results.Nfft;
 Y    = p.Results.Y;
-pc   = p.Results.pc;
+printFlag   = p.Results.printFlag;
 
 espectro_cruzado = ~isempty(Y);
 
@@ -141,13 +144,20 @@ if ~isempty(Y) && length(Y) ~= length(X)
 end
 
 %Verificar que X e Y son vector columna
-if size(X, 1) ~= length(X)
-    X = X';
+if ~isvector(X)
+    error('X debe ser un vector fila o columna.');
 end
+X = X(:);
+
 if ~isempty(Y)
-    if size(Y, 1) ~= length(Y)
-        Y = Y';
+    if ~isvector(Y)
+        error('Y debe ser un vector fila o columna.');
     end
+    Y = Y(:);
+end
+
+if mod(N0,1) ~= 0
+    error('N0 debe ser entero.');
 end
 
 %Verificar tamaños de entradas opcionales
@@ -159,6 +169,8 @@ elseif N0~=N0_default && N0>N
     error('N0 no puede ser mayor que N')
 end
 
+
+
 %% Actualización de parámetros para consistencia de los cálculos y prioridades
 %Modificar resultados de acuerdo a prioridades de parametros introducidos
 %Prioridades:
@@ -166,7 +178,7 @@ end
 %       resultantes dependerán si además se especifica N, N0 o ambos.
 
 if K~=K_default
-    if pc
+    if printFlag
         fprintf('Especificado valor de K, ajustando los demás parámetros:\n')
     end
     if K < 1
@@ -178,7 +190,7 @@ if K~=K_default
                 % Acciones: 
                 %   1) Recortar M tal que M = K(N-N0)+N0
                 M = K*(N-N0)+N0;         
-                if pc
+                if printFlag
                     fprintf('    M = %d\n', M)
                 end
             else 
@@ -186,9 +198,9 @@ if K~=K_default
                 % Acciones: 
                 %   1) Hacer N0 = N/2
                 %   2) Recortar M tal que M = K(N-N0)+N0
-                N0 = floor(N/2);               
+                N0 = N/2;               
                 M = K*(N-N0)+N0;         
-                if pc
+                if printFlag
                     fprintf('    M = %d\n', M)
                     fprintf('    N0 = %d\n', N0)
                 end
@@ -206,7 +218,7 @@ if K~=K_default
                 M = M_new;                  
                 N = (M - N0 + K*N0)/(K);    
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
-                if pc
+                if printFlag
                     fprintf('    M = %d\n', M)
                     fprintf('    N = %d\n', N)
                     fprintf('    Nfft = %d\n', Nfft)
@@ -215,17 +227,21 @@ if K~=K_default
                 %%%%% Caso: 'K', %%%%%
                 % Acciones:
                 %   1) Ajustar M tal que cumpla que N = 2*M/(K+1) es entero
-                %   2) Hacer N = 2*M/(K+1)
-                %   3) Hacer N0 = N/2
+                %   2) Hacer N = 2*M/(K+1)  (Asegurando que N sea par)
+                %   3) Hacer N0 = N/2       (Al asegurar N par, entonces N0 es entero)
                 M_new = M;
-                while mod(2*M_new/(K+1), 1) ~= 0
-                    M_new = M_new-1;
+                while true
+                    N_i = 2*M_new/(K+1);
+                    if mod(N_i, 1) == 0 && mod(N_i, 2) == 0  % Asegurar N par
+                        break
+                    end
+                    M_new = M_new - 1;
                 end
                 M = M_new;                  
                 N = 2*M/(K+1);              
-                N0 = floor(N/2);                   
+                N0 = N/2;                   
                 Nfft = max([Nfft, 512, 2^nextpow2(N)]); 
-                if pc
+                if printFlag
                     fprintf('    M = %d\n', M)
                     fprintf('    N = %d\n', N)
                     fprintf('    N0 = %d\n', N0)
@@ -246,7 +262,7 @@ else %K = K_default
     end
     if M ~= M_new
         M = M_new; 
-        if pc
+        if printFlag
             fprintf('Los parámetros ingresados no cumplen con la razón (M-N0)/(N-N0) que sea un número entero, se ajustó el valor de M a M = %d\n', M)
         end
     end
@@ -254,7 +270,7 @@ else %K = K_default
     if K ~= razon
         K = floor(razon);
         M = K*(N-N0) + N0;
-        if pc
+        if printFlag
             fprintf('El valor de K no es tal que K = (M-N0)/(N-N0) es entero. Se ajustó el valor a K = %d\n', K)
             fprintf('Se ajustó el valor de M a M = %d\n', M)
         end
@@ -269,20 +285,18 @@ end
 X_length = length(X);
 if M > X_length
     if isempty(Y)
-            error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
+        error('El valor de M resultante para los parámetros proporcionados es mayor a la longitud del arreglo, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
     else
-        if pc
-            fprintf('Se especificó un valor de M mayor a la longitud de X e Y,  haciendo M = %d\n', M)
-        end
+        error('Se especificó un valor de M mayor a la longitud de X e Y, se requiere M = %d y se está proporcionando un arreglo de tamaño M = %d', M, X_length)
     end
 elseif M < X_length
     if isempty(Y)
-        if pc
+        if printFlag
             fprintf('El valor de M es menor a la longitud de X, recortando los valores correspondientes de X\n')
         end
         X = X(1:M);
     else
-        if pc
+        if printFlag
             fprintf('El valor de M es menor a la longitud de X e Y, recortando los valores correspondientes de X e Y\n')
         end
         X = X(1:M);
@@ -291,7 +305,7 @@ elseif M < X_length
 end
 
 %Imprimir parámetros resultantes
-if pc
+if printFlag
     fprintf('Parámetros resultantes\n\tM = %d\n\tN = %d\n\tN0 = %d\n\tK = %d\n\tNfft = %d\n\n', M, N, N0, K, Nfft)
 end
 
@@ -302,7 +316,7 @@ end
 % Calculado de acuerdo con (10.64) de (Oppenheim, A. V., 2000), pag 736.
 
 % Ventana de longitud N
-switch lower(string(ventana))
+switch lower(string(window))
     case "rectangular"
         w = rectwin(N);
     case "hann"
@@ -314,7 +328,7 @@ switch lower(string(ventana))
 end
 U = mean(w.^2);
 
-%% Método de Welch-Barlett
+%% Método de Welch-Bartlett
 % Para la secuencia de datos x[n] definida en 0<=n<=(M-1), se divide en
 % K segmentos de N muestras y se aplica a cada segmento una ventana de
 % longitud L. Se forman los segmentos x_r[n] = x[r*R + n], 0<=n<=(N-1)
@@ -393,6 +407,6 @@ info.N0 = N0;
 info.K = K;
 info.Nfft = Nfft;
 info.DoF = 2*K;
-info.window = ventana;
+info.window = window;
 
 end

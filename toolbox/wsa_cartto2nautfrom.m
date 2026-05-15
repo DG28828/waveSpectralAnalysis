@@ -1,18 +1,86 @@
 function out = wsa_cartto2nautfrom(in)
-%wsa_cartto2nautfrom Convierte convención cartesiana-hacia a náutica-desde
+%wsa_cartto2nautfrom - convierte direcciones convención cartesiana-hacia a náutica-desde
 %
-%   Por defecto, el toolbox brinda los resultados con angulos medidos en la
-%   siguiente convención:
-%       - Cartesiana: desde el eje X positivo en dirección de las manecillas del reloj
-%       - Desde: dirección "desde" donde viene el oleaje.
+%   Esta función convierte direcciones y distribuciones direccionales
+%   expresadas en convención cartesiana-hacia a convención náutica-desde.
 %
-%   Este script se puede utilizar para convertir los resultados de los
-%   siguientes structs de datos:
-%       - struct de wsa_dirspectrum
-%       - struct de wsa_directional_parameters
+%   La conversión aplicada corresponde a:
+%
+%       theta_naut = mod(270 - theta_cart, 360)
+%
+%   donde:
+%
+%       • Convención cartesiana-hacia:
+%           - ángulos medidos desde el eje X positivo
+%           - sentido horario
+%           - dirección "hacia" donde viaja el oleaje
+%
+%       • Convención náutica-desde:
+%           - ángulos medidos desde el norte
+%           - sentido horario
+%           - dirección "desde" donde proviene el oleaje
+%
+%
+%   Por defecto, las siguientes funciones del toolbox brindan los 
+%   resultados con angulos medidos en la convención cartesiana-hacia:
+%       - wsa_dirspectrum
+%       - wsa_directional_parameters
 %
 %   La función detecta automáticamente el tipo de struct que se esta
 %   pasando.
+%
+%
+%   Sintaxis:
+%       out = wsa_cartto2nautfrom(in)
+%
+%
+%   Argumentos de entrada:
+%       in      - Struct de entrada.
+%                   Puede corresponder a:
+%                   • Struct de salida de wsa_dirspectrum
+%                   • Struct de salida de wsa_directional_parameters
+%                   • Struct interno de bandas generado por wsa_directional_parameters
+%
+%
+%   Argumentos de salida:
+%       out     - Struct con direcciones convertidas a convención
+%                 náutica-desde.
+%
+%
+%   Campos convertidos:
+%
+%   • Struct tipo wsa_dirspectrum:
+%       Fourier.theta
+%       MEM.theta
+%       Fourier.E
+%       Fourier.D
+%       MEM.E
+%       MEM.D
+%
+%       Las matrices son reordenadas para mantener la coherencia angular tras la conversión.
+%
+%   • Struct tipo wsa_directional_parameters:
+%       DirTp
+%       MeanDir
+%       f_mean_dir
+%       dir_mean_f
+%
+%       Además, la conversión se aplica sobre: out.bands.<nombre_banda>
+%
+%
+%   Notas:
+%   • La función no modifica el struct original; devuelve una copia
+%     convertida.
+%
+% -------------------------------------------------------------------------
+% Universidad de Costa Rica
+% Escuela de Ingeniería Civil
+% Autor: Danny Garro Arias
+% Fecha de creación: 13/05/2026
+% Fecha de modificación: 15/05/2026
+% -------------------------------------------------------------------------
+
+%% Verificaciones iniciales
 
 out = in;
 
