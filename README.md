@@ -67,7 +67,7 @@ Para usar el toolbox se debe clonar o descargar este repositorio y agregar la ca
 subcarpetas al path de MATLAB:
 
 ```matlab
-addpath(genpath("C:\ruta\al\repositorio\toolbox"))
+addpath(genpath("...\repositorio\toolbox"))
 ```
 
 Para verificar que el path quedo correctamente configurado:
