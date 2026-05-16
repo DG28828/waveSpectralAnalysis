@@ -12,7 +12,7 @@ function out = wsa_cartto2nautfrom(in)
 %
 %       • Convención cartesiana-hacia:
 %           - ángulos medidos desde el eje X positivo
-%           - sentido horario
+%           - sentido antihorario
 %           - dirección "hacia" donde viaja el oleaje
 %
 %       • Convención náutica-desde:
