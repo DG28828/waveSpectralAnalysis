@@ -5,9 +5,6 @@ herramientas para estimar espectros de energía, calcular parámetros
 espectrales y direccionales, reconstruir espectros direccionales y procesar
 datos crudos de instrumentos AWAC.
 
-> Primera versión en preparación. El contenido puede cambiar levemente mientras se
-> completan pruebas, ejemplos y documentación.
-
 ## Características
 
 - Estimación de espectros unilaterales de energia mediante el método de Welch-Bartlett (periodogramas medios con solapamiento).
@@ -22,7 +19,7 @@ datos crudos de instrumentos AWAC.
 
 ## Funciones principales
 
-| Funcion | Descripcion |
+| Función | Descripción |
 | --- | --- |
 | `wsa_spectrum` | Estima espectros de energía para superficie libre o presión. |
 | `wsa_spectral_parameters` | Calcula parámetros espectrales totales y por bandas de frecuencia. |
@@ -61,8 +58,18 @@ Funciones principales del flujo:
 - Funciones NetCDF de MATLAB para el flujo AWAC.
 
 ## Instalación
+Se muestran tres opciones para instalación del toolbox. Se recomienda utilizar la 1 o 2, debido a  que el archivo de tolbox .mltbx resuelve los paths de las funciones de forma automática.
 
-Para usar el toolbox se debe clonar o descargar este repositorio y agregar la carpeta `toolbox` con todas sus
+### 1) Desde Matlab File Exchange
+Buscar el toolbox en el Add-On explorer e instalar o descargar el archivo de toolbox .mltbx y ejecutar el archivo.
+Al usar este método se descarga el último release publicado en GitHub.
+
+### 2) Desde el release de Github
+Descargar el release de interés, luego ejecutar el archivo de toolbox .mltbx o usar el código fuente. En el segundo caso, se deben agregar las funciones al path como se detalla en la opción 3.
+
+### 3) Descargando el código fuente
+
+Clonar o descargar el repositorio y agregar la carpeta `toolbox` con todas sus
 subcarpetas al path de MATLAB:
 
 ```matlab
@@ -95,3 +102,5 @@ Ambos comandos deben devolver rutas dentro de la carpeta `toolbox`.
 ## Licencia
 
 Este proyecto se distribuye bajo la licencia incluida en `LICENSE`.
+
+
