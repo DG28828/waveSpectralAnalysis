@@ -1,17 +1,151 @@
 function wsa_awac_nc_write(data, ncfile, varargin)
-%wsa_write_netcdf_level1 Exporta un struct de campaña AWAC a netCDF.
+%wsa_awac_nc_write - exporta datos AWAC a formato netCDF.
 %
-%   wsa_write_netcdf_level1(data, ncfile)
+%   Esta función exporta una estructura de datos AWAC a un archivo netCDF.
+%   La estructura de entrada puede corresponder a datos crudos importados
+%   mediante wsa_awac_read o a datos previamente limpiados mediante
+%   wsa_awac_clean.
 %
-%   data   : struct tipo data_clean
-%   ncfile : ruta completa del archivo .nc a crear
+%   La función escribe en el archivo netCDF las variables principales de
+%   los archivos .whd y .wad, incluyendo orientación del instrumento, 
+%   presión, AST, velocidades orbitales, amplitudes, matriz de 
+%   transformación y flags de control de calidad.
 %
-%   Esta función asume una estructura similar a la del .mat de ejemplo:
-%   data.hdr
-%   data.whd(1:nBurst)
-%   data.wad(1:nBurst)
-%   data.quality
+%   Además, se agregan atributos globales con información de la campaña,
+%   sitio, instrumento, estado de limpieza y configuración básica de
+%   muestreo.
 %
+%
+%   Sintaxis:
+%       wsa_awac_nc_write(data, ncfile)
+%
+%       wsa_awac_nc_write(data, ncfile, ...
+%                       'site_name', site_name, ...
+%                       'campaign_name', campaign_name)
+%
+%       wsa_awac_nc_write(data, ncfile, ...
+%                       'site_name', site_name, ...
+%                       'campaign_name', campaign_name, ...
+%                       'mounting_height', mounting_height, ...
+%                       'overwrite', true)
+%
+%
+%   Argumentos de entrada (requeridos):
+%       data    - Estructura de datos AWAC.
+%                   Estructura generada por wsa_awac_read o
+%                   wsa_awac_clean.
+%
+%       ncfile  - Ruta completa del archivo netCDF a crear.
+%                   String | char.
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%       'site_name'
+%               - Nombre del sitio de medición.
+%                   String | char.
+%                   Por defecto: "".
+%
+%       'campaign_name'
+%               - Nombre de la campaña de medición.
+%                   String | char.
+%                   Por defecto: "".
+%
+%       'mounting_height'
+%               - Altura de montaje del instrumento respecto al fondo.
+%                   Escalar numérico (m).
+%                   Por defecto: [].
+%
+%       'overwrite'
+%               - Bandera para sobrescribir el archivo netCDF si ya existe.
+%                   true | false
+%                   Por defecto: true.
+%
+%
+%   Argumentos de salida:
+%       Esta función no devuelve argumentos de salida. El resultado se 
+%       guarda directamente en el archivo especificado por ncfile.
+%
+%
+%   Variables principales escritas en netCDF:
+%
+%       Variables dependientes de burst:
+%           time
+%           burst_counter
+%           n_wave_records
+%           cell_position
+%           battery_voltage
+%           sound_speed
+%           heading
+%           pitch
+%           roll
+%           min_pressure
+%           max_pressure
+%           temperature
+%           cell_size
+%           ast_window_start
+%           ast_window_size
+%           ast_window_offset
+%
+%       Variables dependientes de sample y burst:
+%           pressure
+%           ast
+%           ast_quality
+%           analog_input
+%           velocity_beams
+%           amplitude
+%
+%       Variables auxiliares:
+%           noise_amp_beams
+%           transformation_matrix
+%
+%       Variables de control de calidad:
+%           samples_flag
+%           size_flag
+%           orientation_flag
+%           pressure_flag
+%           is_bad_burst
+%           bad_tilt_flag
+%           warning_tilt_flag
+%
+%
+%   Notas:
+%   • La función verifica que el struct de entrada contenga los campos whd
+%     y wad.
+%
+%   • La cantidad de bursts en whd y wad debe coincidir.
+%
+%   • Si el archivo netCDF ya existe y overwrite = true, el archivo
+%     existente se elimina antes de crear el nuevo archivo.
+%
+%   • Si el directorio de salida no existe, se crea automáticamente.
+%
+%   • El tiempo de cada burst se almacena como segundos POSIX:
+%
+%         seconds since 1970-01-01 00:00:00 UTC
+%
+%   • Si la estructura de entrada contiene información de limpieza, los
+%     atributos globales time_start, time_end, cleaning_type y
+%     Number_of_wave_measurements se toman de data.cleaning.
+%
+%   • Si la estructura de entrada no contiene información de limpieza, los
+%     atributos globales anteriores se toman de data.quality.summary y
+%     data.hdr.general.
+%
+%   • El atributo preprocessing_status se inicializa como false, ya que
+%     esta función únicamente escribe datos crudos o limpios, pero no datos
+%     preprocesados.
+%
+%   • El archivo resultante conserva las series temporales originales de
+%     presión, AST y velocidades en coordenadas de beams. La transformación
+%     a coordenadas ENU debe realizarse en una etapa posterior de
+%     preprocesamiento.
+%
+% -------------------------------------------------------------------------
+% Universidad de Costa Rica
+% Escuela de Ingeniería Civil
+% Autor: Danny Garro Arias
+% Fecha de creación: 10/03/2026
+% Fecha de modificación: 19/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

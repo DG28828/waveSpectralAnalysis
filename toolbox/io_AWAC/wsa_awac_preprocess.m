@@ -1,5 +1,161 @@
 function info = wsa_awac_preprocess(ncfile, varargin)
-
+%wsa_awac_preprocess - preprocesa señales de oleaje de Nortek AWAC.
+%
+%   Esta función realiza el preprocesamiento de señales de oleaje medidas
+%   mediante equipos Nortek AWAC almacenadas en un archivo netCDF.
+%
+%   El preprocesamiento incluye:
+%
+%       - Corrección y combinación de señales AST.
+%       - Transformación de velocidades beam a coordenadas ENU.
+%       - Filtrado pasa altas de presión, AST y velocidades.
+%       - Escritura de variables procesadas en el archivo netCDF.
+%
+%   La función genera nuevas variables procesadas dentro del mismo archivo
+%   netCDF, preservando las señales originales.
+%
+%
+%   Sintaxis:
+%       info = wsa_awac_preprocess(ncfile)
+%
+%       info = wsa_awac_preprocess(ncfile, ...
+%                                   'ast_corr_flag', true)
+%
+%       info = wsa_awac_preprocess(ncfile, ...
+%                                   'ast_corr_flag', true, ...
+%                                   'filter_flag', true)
+%
+%
+%   Argumentos de entrada (requeridos):
+%       ncfile     - Ruta al archivo netCDF de campaña AWAC.
+%                    String o char.
+%
+%
+%   Parámetros Nombre-Valor (opcionales):
+%
+%       'ast_corr_flag'
+%                   - Bandera para aplicar corrección y despiking de AST.
+%                     true | false
+%
+%                     Por defecto: true.
+%
+%       'filter_flag'
+%                   - Bandera para aplicar filtrado pasa altas a presión,
+%                     AST y velocidades.
+%                     true | false
+%
+%                     Por defecto: true.
+%
+%
+%   Argumentos de salida:
+%
+%       info        - Estructura con información del preprocesamiento:
+%
+%           ast
+%               .raw
+%               .corr
+%               .proc
+%               .ast_bad_detects
+%               .ast_bad_detects_percentage
+%
+%           pressure
+%               .raw
+%               .proc
+%
+%           velocity_beams
+%               .raw
+%
+%           velocity_enu
+%               .raw
+%               .proc
+%
+%           transformation_matrix
+%           heading
+%           pitch
+%           roll
+%
+%           filter
+%               .flag
+%               .fc
+%               .order
+%
+%
+%   Variables escritas en netCDF:
+%
+%       burst_time
+%       burst_time_ast
+%
+%       pressure_proc
+%
+%       ast_proc
+%       ast_proc_comb
+%       ast_mean
+%
+%       velocity_enu
+%       velocity_proc
+%
+%       ast_bad_detects
+%       ast_bad_detects_percentage
+%
+%
+%   Notas:
+%
+%   • El archivo netCDF debe contener las siguientes variables:
+%
+%         ast
+%         pressure
+%         velocity_beams
+%         transformation_matrix
+%         heading
+%         pitch
+%         roll
+%
+%   • Las señales AST son corregidas mediante wsa_ast_corr, el cual realiza
+%     despiking iterativo y corrección por aceleración gravitacional.
+%
+%   • Posteriormente, las dos señales AST se combinan mediante
+%     wsa_ast_combine para obtener una única señal a doble frecuencia de
+%     muestreo.
+%
+%   • Las velocidades orbitales son transformadas desde coordenadas beam a
+%     coordenadas ENU (East-North-Up) utilizando:
+%
+%         - matriz de transformación del instrumento
+%         - heading
+%         - pitch
+%         - roll
+%
+%   • El filtrado pasa altas se aplica para remover componentes de muy baja
+%     frecuencia asociadas a:
+%
+%         - cambios lentos de nivel medio
+%         - componentes no asociadas al oleaje
+%
+%   • El filtro utilizado corresponde a:
+%
+%         fc = 1/340 Hz
+%         orden = 4
+%
+%   • El preprocesamiento no elimina bursts completos. Todas las señales
+%     son procesadas burst por burst.
+%
+%   • La función actualiza el atributo global:
+%
+%         preprocessing_status = true
+%
+%     indicando que el archivo ya fue preprocesado.
+%
+%   • Las señales originales permanecen almacenadas en el archivo netCDF.
+%     Las señales procesadas se almacenan en nuevas variables con sufijo
+%     "_proc".
+%
+% -------------------------------------------------------------------------
+% Universidad de Costa Rica
+% Escuela de Ingeniería Civil
+% Autor: Danny Garro Arias
+% Fecha de creación: 10/03/2026
+% Fecha de modificación: 19/05/2026
+% -------------------------------------------------------------------------
 %% Manejo de entradas
 
 ast_corr_flag_default = true;
