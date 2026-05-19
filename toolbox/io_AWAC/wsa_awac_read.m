@@ -903,6 +903,7 @@ roll    = [data.whd.roll_deg];
 % 1) Límites absolutos
 bad_tilt_flag = abs(pitch) > pitch_limit | abs(roll) > roll_limit;
 warning_tilt_flag = abs(pitch) > 5 | abs(roll) > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST y velocidades no serán confiables
+warning_tilt_flag_10 = abs(pitch) > 10 | abs(roll) > 10;
 
 % 2) Cambios bruscos entre bursts
 d_heading = abs(diff(heading));
@@ -925,12 +926,12 @@ for b = 1:nBursts_whd
     data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
-        fprintf('Burst %d presenta problemas de orientación\n', b)
+        fprintf('Burst %d presenta problemas de orientación. Cambio en heading, pitch o roll mayor al límite establecido.\n', b)
     end
 
     if warning_tilt_flag(b)
-        if bad_tilt_flag(b)
-            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades son inutilizables.\n', b)
+        if warning_tilt_flag_10(b)
+            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades podrían ser inutilizables.\n', b)
         else
             fprintf('Burst %d presenta un tilt mayor a 5°, mediciones AST y velocidades podrían no ser confiables.\n', b)
         end
