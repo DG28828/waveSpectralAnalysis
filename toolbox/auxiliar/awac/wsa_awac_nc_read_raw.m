@@ -106,6 +106,7 @@ data.hdr.setup.Wave_Number_of_samples = read_att_safe(ncfile, '/', 'wave_number_
 data.hdr.setup.Wave_Sampling_rate_Hz = read_att_safe(ncfile, '/', 'wave_sampling_rate_Hz', NaN);
 data.hdr.setup.Coordinate_system = string(read_att_safe(ncfile, '/', 'Coordinate_system', ""));
 data.hdr.setup.Blanking_distance_m = read_att_safe(ncfile, '/', 'Blanking_distance_m', NaN);
+data.hdr.setup.Wave_burst_duration_s = read_att_safe(ncfile, '/', 'Wave_burst_duration_s', NaN);
 
 data.hdr.hardware_configuration = struct();
 data.hdr.hardware_configuration.Serial_number = string(read_att_safe(ncfile, '/', 'instrument_serial', ""));
