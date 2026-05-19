@@ -1,42 +1,173 @@
 function data = wsa_awac_read(files_dir, varargin)
-%wsa_read_awac - Importa datos de AWAC.
+%wsa_awac_read - lectura y verificación de calidad de datos AWAC.
 %
-%   AAAA
+%   Esta función permite importar datos crudos de oleaje medidos mediante
+%   equipos Nortek AWAC a partir de los archivos .hdr, .whd y .wad.
 %
+%   La función extrae la configuración instrumental, parámetros de
+%   despliegue, información de orientación y las series temporales de
+%   presión, AST y velocidades orbitales contenidas en los archivos
+%   originales del instrumento.
+%
+%   Además, se realizan múltiples verificaciones automáticas de calidad
+%   (Quality Control, QC) para identificar bursts problemáticos antes del 
+%   procesamiento espectral y direccional.
 %
 %
 %   Sintaxis:
-%       data = wsa_read_awac(files_dir, varargin)
+%       data = wsa_awac_read(files_dir)
+%
+%       data = wsa_awac_read(files_dir, 'pitch_limit', 10, 'roll_limit', 10)
+%
+%       data = wsa_awac_read(files_dir, 'min_pressure_limit', 2, 'bad_pressure_sample_percentage_limit', 5)
 %
 %
 %   Argumentos de entrada (requeridos):
+%       files_dir  - Directorio que contiene los archivos crudos AWAC.
+%                       String o char.
 %
+%                       El directorio debe contener:
+%                           *.hdr
+%                           *.whd
+%                           *.wad
 %
 %
 %   Parámetros Nombre-Valor (opcionales):
 %
+%       'pitch_limit' - Límite absoluto permitido para pitch.
+%                       Escalar positivo (°).
+%                       Por defecto: 10°.
+%
+%       'roll_limit'  - Límite absoluto permitido para roll.
+%                       Escalar positivo (°).
+%                       Por defecto: 10°.
+%
+%       'heading_jump_limit'
+%                       Cambio máximo permitido de heading entre bursts.
+%                       Escalar positivo (°).
+%                       Por defecto: 20°.
+%
+%       'tilt_jump_limit'
+%                       Cambio máximo permitido de pitch/roll entre bursts.
+%                       Escalar positivo (°).
+%                       Por defecto: 5°.
+%
+%       'min_pressure_limit'
+%                       Presión mínima permitida.
+%                       Escalar positivo (dbar).
+%                       Bursts con presión media inferior a este valor
+%                       serán marcados.
+%                       Por defecto: 1 dbar.
+%
+%       'pressure_drop_limit'
+%                       Diferencia máxima permitida entre la presión media
+%                       del burst y la mediana de toda la campaña.
+%                       Escalar positivo (dbar).
+%                       Por defecto: 5 dbar.
+%
+%       'bad_pressure_sample_percentage_limit'
+%                       Porcentaje máximo permitido de muestras con presión
+%                       menor a 'min_pressure_limit'.
+%                       Escalar entre 0 y 100 (%).
+%                       Por defecto: 5 %.
+%
+%       'do_plot'     - Bandera para generar figuras de verificación.
+%                       true | false
+%                       Por defecto: false.
+%
+%       'save_plot_dir'
+%                       Directorio para guardar figuras generadas.
+%                       String o char.
+%                       Si se especifica, automáticamente:
+%                           do_plot = true
 %
 %
 %   Argumentos de salida:
 %
+%   data        - Estructura principal con:
+%
+%       hdr         - Información extraída del archivo .hdr:
+%                       configuración instrumental,
+%                       setup,
+%                       hardware,
+%                       matrices de transformación,
+%                       formatos de archivos.
+%
+%       whd         - Información de cada burst obtenida del archivo .whd:
+%                       tiempo,
+%                       orientación,
+%                       presión,
+%                       parámetros auxiliares.
+%
+%       wad         - Series temporales de cada burst:
+%                       presión,
+%                       AST,
+%                       velocidades,
+%                       amplitudes.
+%
+%       quality     - Información de control de calidad:
+%
+%           flags       - Flags booleanos por burst:
+%
+%               samples_flag
+%               size_flag
+%               orientation_flag
+%               warning_tilt_flag
+%               bad_tilt_flag
+%               pressure_flag
+%               pressure_sample_flag
+%
+%           summary     - Resumen general de verificaciones:
+%                           cantidad de bursts malos,
+%                           porcentajes,
+%                           índices,
+%                           fechas.
 %
 %
 %   Notas:
-%   • 
 %
-%   • 
+%   • La función verifica automáticamente la consistencia entre los
+%     archivos .hdr, .whd y .wad.
 %
-%   • 
+%   • El archivo .wad es segmentado automáticamente en bursts utilizando
+%     timestamps o burst counter, dependiendo de la información disponible.
 %
-%   • 
+%   • Se verifica la consistencia del número de muestras por burst respecto
+%     a la configuración indicada en el archivo .hdr.
 %
+%   • Las verificaciones de orientación consideran:
+%
+%         - límites absolutos de pitch y roll
+%         - cambios bruscos entre bursts consecutivos
+%
+%   • Bursts con tilt superior a 5° son marcados mediante
+%     warning_tilt_flag debido a que las mediciones AST y velocidades
+%     orbitales podrían no ser confiables. (no son eliminados)
+%
+%   • Bursts con tilt superior a 10° son marcados mediante
+%     bad_tilt_flag debido a que las mediciones AST y velocidades
+%     orbitales se consideran inválidas. . (no son eliminados)
+%
+%   • Las verificaciones de presión consideran:
+%
+%         1) presión media del burst
+%
+%         2) porcentaje de muestras por debajo de una presión mínima
+%
+%     Este segundo criterio permite detectar bursts adquiridos durante
+%     procesos de instalación o recuperación del instrumento, donde parte
+%     del burst puede encontrarse fuera del agua o afectado por la
+%     presencia de buzos u obstrucciones cercanas al sensor.
+%
+%   • La función no realiza limpieza ni procesamiento espectral de las
+%     señales. Únicamente importa y verifica calidad básica de los datos.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/03/2026
-% Fecha de modificación: 15/05/2026
+% Fecha de modificación: 19/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -991,7 +1122,7 @@ if do_plot
     f = figure('Name','Verificación de muestras de presión','Color','w');
     f.Position = [1, 1, 1900, 1000];
     hold on
-    t = title('Verificación de muestras de presión. Porcentaje por debajo del límite.');
+    t = title('Verificación de muestras de presión. Porcentaje superior al límite.');
     xl = xlabel('Burst');
     yl = ylabel('Porcentaje (%)');
 
