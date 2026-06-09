@@ -7,7 +7,7 @@
     <param.summary>Toolbox de MATLAB para análisis espectral y direccional de oleaje.</param.summary>
     <param.description>Incluye herramientas para estimar espectros de energía, calcular parámetros espectrales y direccionales, reconstruir espectros direccionales y procesar datos crudos de instrumentos AWAC.</param.description>
     <param.screenshot>${PROJECT_ROOT}\images\waveSpectralAnalysis.jpg</param.screenshot>
-    <param.version>1.0.0</param.version>
+    <param.version>1.1.0</param.version>
     <param.output>${PROJECT_ROOT}\Wave Spectral Analysis.mltbx</param.output>
     <param.products.name>
       <item>Signal Processing Toolbox</item>
