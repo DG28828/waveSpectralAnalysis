@@ -34,7 +34,7 @@ datos crudos de instrumentos AWAC.
 
 Nota: Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
 
-## Flujo AWAC
+## AWAC
 
 El toolbox incluye funciones para trabajar con datos crudos de AWAC:
 
@@ -45,7 +45,7 @@ wsa_awac_nc_write(data_clean, "data_clean.nc");
 info = wsa_awac_preprocess("data_clean.nc");
 ```
 
-Funciones principales del flujo:
+Funciones principales:
 
 - `wsa_awac_read`: lee archivos desencriptados `.hdr`, `.whd` y `.wad`, construye un struct con los datos de la campaña y genera banderas de control de calidad de los estados de mar.
 - `wsa_awac_clean`: en el modo automático elimina bursts marcados en la lectura o permite ingresar indices manualmente.
@@ -62,8 +62,7 @@ Funciones principales del flujo:
 Se muestran tres opciones para instalación del toolbox. Se recomienda utilizar la 1 o 2, debido a  que el archivo de tolbox .mltbx resuelve los paths de las funciones de forma automática.
 
 ### 1) Desde Matlab File Exchange
-Buscar el toolbox en el Add-On explorer e instalar o descargar el archivo de toolbox .mltbx y ejecutar el archivo.
-Al usar este método se descarga el último release publicado en GitHub.
+En Matlab, ir a la pestaña Home, y abrir Get Add-Ons. Buscar el toolbox como Wave Spectral Analysis e instalar o descargar el archivo de toolbox .mltbx. Al usar este método se descarga el último release publicado en GitHub.
 
 ### 2) Desde el release de Github
 Descargar el release de interés, luego ejecutar el archivo de toolbox .mltbx o usar el código fuente. En el segundo caso, se deben agregar las funciones al path como se detalla en la opción 3.
@@ -94,7 +93,7 @@ Ambos comandos deben devolver rutas dentro de la carpeta `toolbox`.
   negativo, por ejemplo `z_p = -0.5`.
 - En `wsa_spectrum`, la señal se preprocesa removiendo media y tendencia antes
   de estimar el espectro.
-- En el flujo direccional, la componente de frecuencia cero se excluye del
+- En el análisis direccional, la componente de frecuencia cero se excluye del
   análisis direccional.
 - Las direcciones de `wsa_dirspectrum` y `wsa_directional_parameters` usan por
   defecto convencion cartesiana-hacia (angulos positivos medidos desde el eje X positivo en dirección contraria a las manecillas del reloj).
