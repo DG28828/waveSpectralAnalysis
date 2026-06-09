@@ -1,42 +1,81 @@
 function data_clean = wsa_awac_clean(data_in, varargin)
-%wsa_read_awac - Importa datos de AWAC.
+%wsa_awac_clean - limpia datos AWAC a partir de flags de calidad.
 %
-%   AAAA
+%   Esta función elimina bursts problemáticos de una estructura de datos
+%   AWAC previamente importada mediante wsa_awac_read, o reconstruida desde
+%   un archivo raw.nc.
 %
+%   La limpieza puede realizarse de forma automática, utilizando los flags
+%   de calidad generados durante la lectura de los datos, o de forma manual,
+%   indicando directamente los índices de los bursts que se desean eliminar.
 %
 %
 %   Sintaxis:
-%       data = wsa_read_awac(files_dir, varargin)
+%       data_clean = wsa_awac_clean(data_in)
+%
+%       data_clean = wsa_awac_clean(data_in, 'man', true, 'clean_idx', clean_idx)
 %
 %
 %   Argumentos de entrada (requeridos):
+%       data_in   - Datos AWAC crudos.
+%                   Puede ser:
 %
+%                       1) Estructura data generada por wsa_awac_read.
+%
+%                       2) Ruta a un archivo raw.nc generado previamente.
+%                          String | char.
 %
 %
 %   Parámetros Nombre-Valor (opcionales):
+%       'man'     - Bandera para activar limpieza manual.
+%                   true | false
+%                   Por defecto: false.
 %
+%       'clean_idx'
+%                 - Índices de bursts que se desean eliminar manualmente.
+%                   Vector de enteros positivos.
+%
+%                   Este parámetro es requerido cuando: 'man' = true                  
 %
 %
 %   Argumentos de salida:
+%       data_clean - Estructura AWAC limpia.
 %
+%                    Conserva la estructura general de data_in, pero elimina
+%                    de los campos whd y wad los bursts marcados como malos.
+%
+%                    Además, agrega o actualiza:
+%
+%                    cleaning.Number_of_wave_measurements
+%                    cleaning.time_start
+%                    cleaning.time_end
+%                    cleaning.cleaning_type
+%                    cleaning_status
 %
 %
 %   Notas:
-%   • 
+%   • En modo automático, la función elimina los bursts indicados en:
 %
-%   • 
+%         data.quality.summary.bad_bursts
 %
-%   • 
+%   • En modo manual, la función elimina únicamente los bursts indicados
+%     mediante clean_idx.
 %
-%   • 
+%   • La función no modifica las series temporales dentro de cada burst.
+%     Únicamente elimina bursts completos.
 %
+%   • La función verifica que los datos de entrada no hayan sido limpiados
+%     previamente mediante el campo cleaning_status.
+%
+%   • Si data_in corresponde a una ruta raw.nc, la estructura data se
+%     reconstruye internamente mediante wsa_awac_nc_read_raw.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 15/05/2026
+% Fecha de modificación: 19/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

@@ -1,42 +1,173 @@
 function data = wsa_awac_read(files_dir, varargin)
-%wsa_read_awac - Importa datos de AWAC.
+%wsa_awac_read - lectura y verificación de calidad de datos AWAC.
 %
-%   AAAA
+%   Esta función permite importar datos crudos de oleaje medidos mediante
+%   equipos Nortek AWAC a partir de los archivos .hdr, .whd y .wad.
 %
+%   La función extrae la configuración instrumental, parámetros de
+%   despliegue, información de orientación y las series temporales de
+%   presión, AST y velocidades orbitales contenidas en los archivos
+%   originales del instrumento.
+%
+%   Además, se realizan múltiples verificaciones automáticas de calidad
+%   (Quality Control, QC) para identificar bursts problemáticos antes del 
+%   procesamiento espectral y direccional.
 %
 %
 %   Sintaxis:
-%       data = wsa_read_awac(files_dir, varargin)
+%       data = wsa_awac_read(files_dir)
+%
+%       data = wsa_awac_read(files_dir, 'pitch_limit', 10, 'roll_limit', 10)
+%
+%       data = wsa_awac_read(files_dir, 'min_pressure_limit', 2, 'bad_pressure_sample_percentage_limit', 5)
 %
 %
 %   Argumentos de entrada (requeridos):
+%       files_dir  - Directorio que contiene los archivos crudos AWAC.
+%                       String o char.
 %
+%                       El directorio debe contener:
+%                           *.hdr
+%                           *.whd
+%                           *.wad
 %
 %
 %   Parámetros Nombre-Valor (opcionales):
 %
+%       'pitch_limit' - Límite absoluto permitido para pitch.
+%                       Escalar positivo (°).
+%                       Por defecto: 10°.
+%
+%       'roll_limit'  - Límite absoluto permitido para roll.
+%                       Escalar positivo (°).
+%                       Por defecto: 10°.
+%
+%       'heading_jump_limit'
+%                       Cambio máximo permitido de heading entre bursts.
+%                       Escalar positivo (°).
+%                       Por defecto: 20°.
+%
+%       'tilt_jump_limit'
+%                       Cambio máximo permitido de pitch/roll entre bursts.
+%                       Escalar positivo (°).
+%                       Por defecto: 5°.
+%
+%       'min_pressure_limit'
+%                       Presión mínima permitida.
+%                       Escalar positivo (dbar).
+%                       Bursts con presión media inferior a este valor
+%                       serán marcados.
+%                       Por defecto: 1 dbar.
+%
+%       'pressure_drop_limit'
+%                       Diferencia máxima permitida entre la presión media
+%                       del burst y la mediana de toda la campaña.
+%                       Escalar positivo (dbar).
+%                       Por defecto: 5 dbar.
+%
+%       'bad_pressure_sample_percentage_limit'
+%                       Porcentaje máximo permitido de muestras con presión
+%                       menor a 'min_pressure_limit'.
+%                       Escalar entre 0 y 100 (%).
+%                       Por defecto: 5 %.
+%
+%       'do_plot'     - Bandera para generar figuras de verificación.
+%                       true | false
+%                       Por defecto: false.
+%
+%       'save_plot_dir'
+%                       Directorio para guardar figuras generadas.
+%                       String o char.
+%                       Si se especifica, automáticamente:
+%                           do_plot = true
 %
 %
 %   Argumentos de salida:
 %
+%   data        - Estructura principal con:
+%
+%       hdr         - Información extraída del archivo .hdr:
+%                       configuración instrumental,
+%                       setup,
+%                       hardware,
+%                       matrices de transformación,
+%                       formatos de archivos.
+%
+%       whd         - Información de cada burst obtenida del archivo .whd:
+%                       tiempo,
+%                       orientación,
+%                       presión,
+%                       parámetros auxiliares.
+%
+%       wad         - Series temporales de cada burst:
+%                       presión,
+%                       AST,
+%                       velocidades,
+%                       amplitudes.
+%
+%       quality     - Información de control de calidad:
+%
+%           flags       - Flags booleanos por burst:
+%
+%               samples_flag
+%               size_flag
+%               orientation_flag
+%               warning_tilt_flag
+%               bad_tilt_flag
+%               pressure_flag
+%               pressure_sample_flag
+%
+%           summary     - Resumen general de verificaciones:
+%                           cantidad de bursts malos,
+%                           porcentajes,
+%                           índices,
+%                           fechas.
 %
 %
 %   Notas:
-%   • 
 %
-%   • 
+%   • La función verifica automáticamente la consistencia entre los
+%     archivos .hdr, .whd y .wad.
 %
-%   • 
+%   • El archivo .wad es segmentado automáticamente en bursts utilizando
+%     timestamps o burst counter, dependiendo de la información disponible.
 %
-%   • 
+%   • Se verifica la consistencia del número de muestras por burst respecto
+%     a la configuración indicada en el archivo .hdr.
 %
+%   • Las verificaciones de orientación consideran:
+%
+%         - límites absolutos de pitch y roll
+%         - cambios bruscos entre bursts consecutivos
+%
+%   • Bursts con tilt superior a 5° son marcados mediante
+%     warning_tilt_flag debido a que las mediciones AST y velocidades
+%     orbitales podrían no ser confiables. (no son eliminados)
+%
+%   • Bursts con tilt superior a 10° son marcados mediante
+%     bad_tilt_flag debido a que las mediciones AST y velocidades
+%     orbitales se consideran inválidas. . (no son eliminados)
+%
+%   • Las verificaciones de presión consideran:
+%
+%         1) presión media del burst
+%
+%         2) porcentaje de muestras por debajo de una presión mínima
+%
+%     Este segundo criterio permite detectar bursts adquiridos durante
+%     procesos de instalación o recuperación del instrumento, donde parte
+%     del burst puede encontrarse fuera del agua o afectado por la
+%     presencia de buzos u obstrucciones cercanas al sensor.
+%
+%   • La función no realiza limpieza ni procesamiento espectral de las
+%     señales. Únicamente importa y verifica calidad básica de los datos.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/03/2026
-% Fecha de modificación: 15/05/2026
+% Fecha de modificación: 19/05/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -48,6 +179,7 @@ heading_jump_limit_default  = 20;    % cambio brusco entre bursts
 tilt_jump_limit_default     = 5;    % cambio brusco pitch/roll
 min_pressure_limit_default  = 1;     % dbar (casi fuera del agua)
 pressure_drop_limit_default = 5;     % dbar respecto a mediana
+bad_pressure_sample_percentage_limit_default = 5;  % Porcentaje de samples menores a min_pressure_limit.
 plot_default                = false; % No graficar por defecto
 save_plot_dir_default       = [];    % Vacio por defecto
 
@@ -65,6 +197,7 @@ addParameter(p, 'heading_jump_limit', heading_jump_limit_default)
 addParameter(p, 'tilt_jump_limit', tilt_jump_limit_default)
 addParameter(p, 'min_pressure_limit', min_pressure_limit_default)
 addParameter(p, 'pressure_drop_limit', pressure_drop_limit_default)
+addParameter(p, 'bad_pressure_sample_percentage_limit', bad_pressure_sample_percentage_limit_default)
 addParameter(p, 'do_plot', plot_default)
 addParameter(p, 'save_plot_dir', save_plot_dir_default)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -78,6 +211,7 @@ heading_jump_limit  = p.Results.heading_jump_limit;
 tilt_jump_limit     = p.Results.tilt_jump_limit;
 min_pressure_limit  = p.Results.min_pressure_limit;
 pressure_drop_limit = p.Results.pressure_drop_limit;
+bad_pressure_sample_percentage_limit = p.Results.bad_pressure_sample_percentage_limit;
 do_plot             = p.Results.do_plot;
 save_plot_dir       = p.Results.save_plot_dir;  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -766,11 +900,10 @@ pitch   = [data.whd.pitch_deg];
 roll    = [data.whd.roll_deg];
 
 
-orientation_flag = false(nBursts_whd,1);
-
 % 1) Límites absolutos
 bad_tilt_flag = abs(pitch) > pitch_limit | abs(roll) > roll_limit;
 warning_tilt_flag = abs(pitch) > 5 | abs(roll) > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST y velocidades no serán confiables
+warning_tilt_flag_10 = abs(pitch) > 10 | abs(roll) > 10;
 
 % 2) Cambios bruscos entre bursts
 d_heading = abs(diff(heading));
@@ -793,12 +926,12 @@ for b = 1:nBursts_whd
     data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
-        fprintf('Burst %d presenta problemas de orientación\n', b)
+        fprintf('Burst %d presenta problemas de orientación. Cambio en heading, pitch o roll mayor al límite establecido.\n', b)
     end
 
     if warning_tilt_flag(b)
-        if bad_tilt_flag(b)
-            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades son inutilizables.\n', b)
+        if warning_tilt_flag_10(b)
+            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades podrían ser inutilizables.\n', b)
         else
             fprintf('Burst %d presenta un tilt mayor a 5°, mediciones AST y velocidades podrían no ser confiables.\n', b)
         end
@@ -897,18 +1030,23 @@ end
 
 
 fprintf('\n-----------------------------------              Verificación de presión             ----------------------------------\n');
-
-mean_pressure = NaN(nBursts_whd,1);
-
-for b = 1:minBursts
-    mean_pressure(b) = mean(data.wad(b).pressure_dbar);
-end
-
-median_pressure = median(mean_pressure, 'omitnan');
-
 fprintf('\nLímites establecidos:\n')
 fprintf('\t-Presión mínima: %d dbar\n', min_pressure_limit)
 fprintf('\t-Diferencia de presión respecto a la mediana: %d dbar\n\n', pressure_drop_limit)
+
+% Se realiza una verificación de la presión siguiendo los siguientes
+% criterios:
+%
+%   1) Presión media del burst
+%       Se verifica la presión media del burst y se compara con una presión
+%       mínima y límites +-mediana. Se marca el burst si la presión mínima
+%       supera alguno de los criterios.
+
+mean_pressure = NaN(nBursts_whd,1);
+for b = 1:minBursts
+    mean_pressure(b) = mean(data.wad(b).pressure_dbar);
+end
+median_pressure = median(mean_pressure, 'omitnan');
 
 bad_pressure = isnan(mean_pressure) | ...
                mean_pressure < min_pressure_limit | ...
@@ -917,12 +1055,9 @@ bad_pressure = isnan(mean_pressure) | ...
 for b = 1:nBursts_whd
     data.quality.flags(b).pressure_flag = bad_pressure(b);
     if bad_pressure(b)
-        fprintf('Burst %d presenta problemas de presión\n', b)
+        fprintf('Burst %d presenta problemas de presión media\n', b)
     end
 end
-
-fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
-    sum(bad_pressure));
 
 if do_plot
     burst_counter_vec = [data.whd.burst_counter];
@@ -961,6 +1096,63 @@ if do_plot
     end
 end
 
+%   2) Porcentaje de samples de presión por debajo de umbral
+%       Se verifica, para cada burst, la cantidad de samples que se
+%       encuentran debajo del umbral establecido. Se elimina el burst si la
+%       cantidad de samples de baja presión superan un porcentaje deseado.
+
+bad_pressure_sample_percentage = NaN(nBursts_whd,1);
+for b = 1:minBursts
+    p = data.wad(b).pressure_dbar;
+    idx_bad = p < min_pressure_limit;
+    bad_pressure_sample_percentage(b) = 100*sum(idx_bad)/numel(p);
+end
+
+sample_pressure_flag = bad_pressure_sample_percentage > bad_pressure_sample_percentage_limit;
+
+for b = 1:nBursts_whd
+    data.quality.flags(b).pressure_sample_flag = sample_pressure_flag(b);
+    if sample_pressure_flag(b)
+        fprintf('Burst %d presenta presión menor a %.2f dbar en un %.2f %% de las muestras.\n', b, min_pressure_limit, bad_pressure_sample_percentage(b))
+    end
+end
+
+if do_plot
+    burst_counter_vec = [data.whd.burst_counter];
+
+    f = figure('Name','Verificación de muestras de presión','Color','w');
+    f.Position = [1, 1, 1900, 1000];
+    hold on
+    t = title('Verificación de muestras de presión. Porcentaje superior al límite.');
+    xl = xlabel('Burst');
+    yl = ylabel('Porcentaje (%)');
+
+    plot(burst_counter_vec, bad_pressure_sample_percentage, '-', 'DisplayName', 'Porcentaje superior al límite', 'LineWidth', 1.5)
+
+    yline(bad_pressure_sample_percentage_limit, '--', 'DisplayName', 'Porcentaje máximo')
+
+    scatter(burst_counter_vec(sample_pressure_flag), ...
+            bad_pressure_sample_percentage(sample_pressure_flag), ...
+            40, 'r', 'filled', ...
+            'DisplayName', 'Burst marcado')
+
+    hold off
+    l = legend('Location','best');
+    grid on
+    t.FontSize = 16;
+    xl.FontSize = 14;
+    yl.FontSize = 14;
+    l.FontSize = 12;
+
+    if ~isempty(save_plot_dir)
+        saveas(gca, fullfile(save_plot_dir, 'verificacion_presion_muestras'), 'png')
+    end
+end
+
+
+fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
+    sum(bad_pressure | sample_pressure_flag));
+
 %% Resumen
 
 fprintf('\n----------------------------------              Resumen de verificaciones             ---------------------------------\n');
@@ -969,8 +1161,9 @@ samples_flag = [data.quality.flags.samples_flag]';
 size_flag        = [data.quality.flags.size_flag]';
 orientation_flag = [data.quality.flags.orientation_flag]';
 pressure_flag    = [data.quality.flags.pressure_flag]';
+pressure_sample_flag = [data.quality.flags.pressure_sample_flag]';
 
-bad_bursts = samples_flag | size_flag | orientation_flag | pressure_flag;
+bad_bursts = samples_flag | size_flag | orientation_flag | pressure_flag | pressure_sample_flag;
 
 fprintf('\nTotal bursts malos detectados: %d de %d\n', ...
     sum(bad_bursts), length(bad_bursts));
@@ -985,6 +1178,7 @@ qc_summary.samples_flag_count     = sum(samples_flag);
 qc_summary.size_flag_count        = sum(size_flag);
 qc_summary.orientation_flag_count = sum(orientation_flag);
 qc_summary.pressure_flag_count    = sum(pressure_flag);
+qc_summary.pressure_sample_flag_count    = sum(pressure_sample_flag);
 
 qc_summary.bad_bursts = bad_bursts;
 qc_summary.total_bad_bursts = sum(bad_bursts);
