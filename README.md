@@ -32,7 +32,7 @@ datos crudos de instrumentos AWAC.
 | `wsa_awac_nc_write` | Escribe datos AWAC a formato NetCDF. |
 | `wsa_awac_preprocess` | Preprocesa señales AWAC guardadas en formato NetCDF. |
 
-Nota: Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
+Nota: Funciones de AWAC probadas con AWAC 1Mhz de Primera Generación.
 
 ## AWAC
 
