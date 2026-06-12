@@ -35,6 +35,75 @@ datos crudos de instrumentos AWAC.
 
 Nota: Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
 
+## Ejemplos de uso
+
+Ejemplos detallados de uso se pueden encontrar como Live Scripts .mlx en la carpeta \toolbox\examples. A continuación se muestra un ejemplo de resumen.
+
+### Datos de entrada
+Para el ejemplo se incluyeron datos de ejemplo en la carpeta \toolbox\example_data.
+```matlab
+data = load('..\example_data\burst_data.mat');
+AST = data.burst_data.processed.ast(:, 1);                    %Elevación de la superficie libre
+U = data.burst_data.processed.velocity_enu(:, 1);             %Velocidad orbital en X.
+V = data.burst_data.processed.velocity_enu(:, 2);             %Velocidad orbital en Y.
+
+fs = data.burst_data.general.fs;                              %Frencuencia de muestreo
+ast_mean = data.burst_data.general.ast_mean;                  %Nivel medio medido desde el equipo
+cell_position = data.burst_data.general.cell_position;        %Distancia de la cabeza del equipo a la celda de medición de velocidades orbitales.
+mounting_height = data.burst_data.general.mounting_height;    %Altura de montaje del equipo.
+
+h   = ast_mean + mounting_height;                             %Profundidad del lecho marino.                                          
+z_v = cell_position - ast_mean;                               %Profunidad de medición de las velocidades orbitales.
+```
+<p align="center">
+  <img src="images/input_data.png" alt="Input Data example" width="850">
+</p>
+
+
+### Espectro frecuencial
+```matlab
+[out_Spec, info_Spec] = wsa_spectrum(AST, fs, 'DoF', 64);
+f = out_Spec.f;
+S = out_Spec.S;
+```
+<p align="center">
+  <img src="images/spectra.png" alt="Wave Spectra example" width="500">
+</p>
+
+
+### Parámetros espectrales
+
+```matlab
+out_Spec_Params = wsa_spectral_parameters(out_Spec)
+```
+<p align="center">
+  <img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="300">
+</p>
+
+
+### Espectro direccional
+```matlab
+[out_DirSpec, info_DirSpec] = wsa_dirspectrum(AST, U, V, fs, 'SUV', ...
+                                             'z_v', z_v, ...
+                                             'h', h);
+f = out_DirSpec.MEM.f;
+theta = out_DirSpec.MEM.theta;
+E = out_DirSpec.MEM.E;
+```
+<p align="center">
+  <img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
+</p>
+
+
+### Parámetros direccionales
+```matlab
+out_Dir_Params = wsa_directional_parameters(out_DirSpec.MEM)
+```
+<p align="center">
+  <img src="images/directional_parameters.png" alt="Directional Parameters example" width="300">
+</p>
+
+
 ## AWAC
 
 El toolbox incluye funciones para trabajar con datos crudos de AWAC:
@@ -103,5 +172,4 @@ Ambos comandos deben devolver rutas dentro de la carpeta `toolbox`.
 ## Licencia
 
 Este proyecto se distribuye bajo la licencia incluida en `LICENSE`.
-
 

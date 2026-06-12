@@ -35,6 +35,71 @@ instrument data.
 
 Note: The AWAC workflow has been tested with a first-generation 1 MHz AWAC.
 
+## Usage Examples
+
+Detailed usage examples are available as .mlx Live Scripts in the \toolbox\examples folder. A summary of the examples is provided below.
+
+### Input Data
+Sample data for the example is included in the \toolbox\example_data folder.
+```matlab
+data = load('..\example_data\burst_data.mat');
+AST = data.burst_data.processed.ast(:, 1);                    %Free-surface elevation
+U = data.burst_data.processed.velocity_enu(:, 1);             %Orbital velocity in X.
+V = data.burst_data.processed.velocity_enu(:, 2);             %Orbital velocity in Y.
+
+fs = data.burst_data.general.fs;                              %Sampling frequency
+ast_mean = data.burst_data.general.ast_mean;                  %Mean level measured from the top of the instrument
+cell_position = data.burst_data.general.cell_position;        %Distance from the top of the instrument to the orbital velocity measurement cell.
+mounting_height = data.burst_data.general.mounting_height;    %Equipment mounting height.
+
+h   = ast_mean + mounting_height;                             %Seafloor depth.                                            
+z_v = cell_position - ast_mean;                               %Measurement depth for orbital velocities.
+```
+<p align="center">
+  <img src="images/input_data.png" alt="Input Data example" width="850">
+</p>
+
+
+### Energy Spectra
+```matlab
+[out_Spec, info_Spec] = wsa_spectrum(AST, fs, 'DoF', 64);
+f = out_Spec.f;
+S = out_Spec.S;
+```
+<p align="center">
+  <img src="images/spectra.png" alt="Wave Spectra example" width="500">
+</p>
+
+### Spectral Parameters
+
+```matlab
+out_Spec_Params = wsa_spectral_parameters(out_Spec)
+```
+<p align="center">
+  <img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="300">
+</p>
+
+### Directional Spectra
+```matlab
+[out_DirSpec, info_DirSpec] = wsa_dirspectrum(AST, U, V, fs, 'SUV', ...
+                                             'z_v', z_v, ...
+                                             'h', h);
+f = out_DirSpec.MEM.f;
+theta = out_DirSpec.MEM.theta;
+E = out_DirSpec.MEM.E;
+```
+<p align="center">
+  <img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
+</p>
+
+### Directional Parameters
+```matlab
+out_Dir_Params = wsa_directional_parameters(out_DirSpec.MEM)
+```
+<p align="center">
+  <img src="images/directional_parameters.png" alt="Directional Parameters example" width="300">
+</p>
+
 ## AWAC
 
 The toolbox includes functions for working with raw AWAC data:
