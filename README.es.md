@@ -39,7 +39,7 @@ Nota: Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
 
 Ejemplos detallados de uso se pueden encontrar como Live Scripts .mlx en la carpeta \toolbox\examples. A continuación se muestra un ejemplo de resumen.
 
-#### Datos de entrada
+### Datos de entrada
 Para el ejemplo se incluyeron datos de ejemplo en la carpeta \toolbox\example_data.
 ```matlab
 data = load('..\example_data\burst_data.mat');
@@ -55,27 +55,33 @@ mounting_height = data.burst_data.general.mounting_height;    %Altura de montaje
 h   = ast_mean + mounting_height;                             %Profundidad del lecho marino.                                          
 z_v = cell_position - ast_mean;                               %Profunidad de medición de las velocidades orbitales.
 ```
-<img src="images/input_data.png" alt="Input Data example" width="500">
+<p align="center">
+  <img src="images/input_data.png" alt="Input Data example" width="850">
+</p>
 
 
-#### Espectro frecuencial
+### Espectro frecuencial
 ```matlab
 [out_Spec, info_Spec] = wsa_spectrum(AST, fs, 'DoF', 64);
 f = out_Spec.f;
 S = out_Spec.S;
 ```
-<img src="images/spectra.png" alt="Wave Spectra example" width="500">
+<p align="center">
+  <img src="images/spectra.png" alt="Wave Spectra example" width="500">
+</p>
 
 
-#### Parámetros espectrales
+### Parámetros espectrales
 
 ```matlab
 out_Spec_Params = wsa_spectral_parameters(out_Spec)
 ```
-<img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="500">
+<p align="center">
+  <img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="300">
+</p>
 
 
-#### Espectro direccional
+### Espectro direccional
 ```matlab
 [out_DirSpec, info_DirSpec] = wsa_dirspectrum(AST, U, V, fs, 'SUV', ...
                                              'z_v', z_v, ...
@@ -84,14 +90,18 @@ f = out_DirSpec.MEM.f;
 theta = out_DirSpec.MEM.theta;
 E = out_DirSpec.MEM.E;
 ```
-<img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
+<p align="center">
+  <img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
+</p>
 
 
-#### Parámetros direccionales
+### Parámetros direccionales
 ```matlab
 out_Dir_Params = wsa_directional_parameters(out_DirSpec.MEM)
 ```
-<img src="images/directional_parameters.png" alt="Directional Parameters example" width="500">
+<p align="center">
+  <img src="images/directional_parameters.png" alt="Directional Parameters example" width="300">
+</p>
 
 
 ## AWAC
