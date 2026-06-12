@@ -1,106 +1,115 @@
-# Wave Spectral Analysis [![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)
+# Wave Spectral Analysis 
+[![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)     [![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/DG28828/waveSpectralAnalysis/blob/main/README.es.md)
 
+MATLAB toolbox for wave spectral and directional analysis. It includes
+tools to estimate energy spectra, compute spectral and directional
+parameters, reconstruct directional spectra, and process raw AWAC
+instrument data.
 
-Toolbox de MATLAB para análisis espectral y direccional de oleaje. Incluye
-herramientas para estimar espectros de energía, calcular parámetros
-espectrales y direccionales, reconstruir espectros direccionales y procesar
-datos crudos de instrumentos AWAC.
+## Features
 
-## Características
+- Estimation of one-sided energy spectra using the Welch-Bartlett method
+  (averaged periodograms with overlap).
+- Hydrodynamic correction for pressure signals using the `Kp` factor.
+- Computation of spectral parameters for the total spectrum and frequency
+  bands.
+- Estimation of directional coefficients and directional spectra using a
+  truncated Fourier series and the MEM-I method (Lygre & Krogstad).
+- Computation of directional parameters by frequency bands.
+- Conversion from Cartesian-to convention to nautical-from convention.
+- Reading, cleaning, NetCDF writing, and preprocessing of AWAC data.
 
-- Estimación de espectros unilaterales de energia mediante el método de Welch-Bartlett (periodogramas medios con solapamiento).
-- Corrección hidrodinámica para señales de presión usando el factor `Kp`.
-- Cálculo de parámetros espectrales por espectro total y por bandas de
-  frecuencia.
-- Estimación de coeficientes direccionales y espectros direccionales con
-  serie de Fourier truncada y método MEM-I (Lygre & Krogstad).
-- Cálculo de parámetros direccionales por bandas.
-- Conversión de convención cartesiana-hacia a convencion náutica-desde.
-- Lectura, limpieza, escritura a NetCDF y preprocesamiento de datos AWAC.
+## Main functions
 
-## Funciones principales
-
-| Función | Descripción |
+| Function | Description |
 | --- | --- |
-| `wsa_spectrum` | Estima espectros de energía para superficie libre o presión. |
-| `wsa_spectral_parameters` | Calcula parámetros espectrales totales y por bandas de frecuencia. |
-| `wsa_dirspectrum` | Estima espectros direccionales con 2 métodos: Serie de Fourier Truncada (TFS) y MEM-I. |
-| `wsa_directional_parameters` | Calcula parámetros direccionales totales y por bandas de frecuencia. |
-| `wsa_cartto2nautfrom` | Convierte direcciones a convencion náutica-desde. |
-| `wsa_awac_read` | Lee datos crudos AWAC. |
-| `wsa_awac_clean` | Limpia bursts AWAC según control de calidad. |
-| `wsa_awac_nc_write` | Escribe datos AWAC a formato NetCDF. |
-| `wsa_awac_preprocess` | Preprocesa señales AWAC guardadas en formato NetCDF. |
+| `wsa_spectrum` | Estimates energy spectra for free-surface elevation or pressure. |
+| `wsa_spectral_parameters` | Computes total spectral parameters and parameters by frequency bands. |
+| `wsa_dirspectrum` | Estimates directional spectra using 2 methods: Truncated Fourier Series (TFS) and MEM-I. |
+| `wsa_directional_parameters` | Computes total directional parameters and parameters by frequency bands. |
+| `wsa_cartto2nautfrom` | Converts directions to the nautical-from convention. |
+| `wsa_awac_read` | Reads raw AWAC data. |
+| `wsa_awac_clean` | Cleans AWAC bursts based on quality control. |
+| `wsa_awac_nc_write` | Writes AWAC data to NetCDF format. |
+| `wsa_awac_preprocess` | Preprocesses AWAC signals stored in NetCDF format. |
 
-Nota: Funciones de AWAC probadas con AWAC 1Mhz de Primera Generación.
+Note: The AWAC workflow has been tested with a first-generation 1 MHz AWAC.
 
 ## AWAC
 
-El toolbox incluye funciones para trabajar con datos crudos de AWAC:
+The toolbox includes functions for working with raw AWAC data:
 
 ```matlab
-data = wsa_awac_read("...\datos_crudos\");
+data = wsa_awac_read("...\raw_data\");
 data_clean = wsa_awac_clean(data);
 wsa_awac_nc_write(data_clean, "data_clean.nc");
 info = wsa_awac_preprocess("data_clean.nc");
 ```
 
-Funciones principales:
+Main functions:
 
-- `wsa_awac_read`: lee archivos desencriptados `.hdr`, `.whd` y `.wad`, construye un struct con los datos de la campaña y genera banderas de control de calidad de los estados de mar.
-- `wsa_awac_clean`: en el modo automático elimina bursts marcados en la lectura o permite ingresar indices manualmente.
-- `wsa_awac_nc_write`: exporta el struct generado por las funciones `wsa_awac_read` o `wsa_awac_clean` a un archivo en formato NetCDF.
-- `wsa_awac_preprocess`: corrige señales AST, transforma velocidades orbitales a ejes geográficos ENU, filtra señales y agrega variables procesadas al NetCDF.
+- `wsa_awac_read`: reads decrypted `.hdr`, `.whd`, and `.wad` files, builds a struct with the campaign data, and generates quality-control flags for sea states.
+- `wsa_awac_clean`: in automatic mode, removes bursts flagged during reading or allows manual indices to be provided.
+- `wsa_awac_nc_write`: exports the struct generated by `wsa_awac_read` or `wsa_awac_clean` to a NetCDF file.
+- `wsa_awac_preprocess`: corrects AST signals, transforms orbital velocities to geographic ENU axes, filters signals, and adds processed variables to the NetCDF file.
 
-## Requisitos
+## Requirements
 
-- MATLAB. El toolbox se ha revisado con MATLAB R2024b.
+- MATLAB. The toolbox has been tested with MATLAB R2024b.
 - Signal Processing Toolbox.
-- Funciones NetCDF de MATLAB para el flujo AWAC.
+- MATLAB NetCDF functions for the AWAC workflow.
 
-## Instalación
-Se muestran tres opciones para instalación del toolbox. Se recomienda utilizar la 1 o 2, debido a  que el archivo de tolbox .mltbx resuelve los paths de las funciones de forma automática.
+## Installation
 
-### 1) Desde Matlab File Exchange
-En Matlab, ir a la pestaña Home, y abrir Get Add-Ons. Buscar el toolbox como Wave Spectral Analysis e instalar o descargar el archivo de toolbox .mltbx. Al usar este método se descarga el último release publicado en GitHub.
+Three installation options are shown below. Options 1 or 2 are recommended,
+because the `.mltbx` toolbox file automatically resolves the function paths.
 
-### 2) Desde el release de Github
-Descargar el release de interés, luego ejecutar el archivo de toolbox .mltbx o usar el código fuente. En el segundo caso, se deben agregar las funciones al path como se detalla en la opción 3.
+### 1) From MATLAB File Exchange
 
-### 3) Descargando el código fuente
+In MATLAB, go to the Home tab and open Get Add-Ons. Search for the toolbox as
+Wave Spectral Analysis and install it, or download the `.mltbx` toolbox file.
+Using this method downloads the latest release published on GitHub.
 
-Clonar o descargar el repositorio y agregar la carpeta `toolbox` con todas sus
-subcarpetas al path de MATLAB:
+### 2) From the GitHub release
+
+Download the release of interest, then run the `.mltbx` toolbox file or use the
+source code. In the second case, the functions must be added to the path as
+described in option 3.
+
+### 3) Downloading the source code
+
+Clone or download the repository and add the `toolbox` folder, including all its
+subfolders, to the MATLAB path:
 
 ```matlab
 addpath(genpath("...\waveSpectralAnalysis\toolbox"))
 ```
 
-Para verificar que el path quedo correctamente configurado:
+To verify that the path was correctly configured:
 
 ```matlab
 which wsa_spectrum
 which wsa_psdwb
 ```
 
-Ambos comandos deben devolver rutas dentro de la carpeta `toolbox`.
+Both commands should return paths inside the `toolbox` folder.
 
+## Conventions and notes
 
-## Convenciones y notas
+- Frequencies are expressed in Hz.
+- Sensor depths below the mean water level are indicated with a negative sign,
+  for example `z_p = -0.5`.
+- In `wsa_spectrum`, the signal is preprocessed by removing the mean and trend
+  before estimating the spectrum.
+- In the directional analysis, the zero-frequency component is excluded from the
+  directional analysis.
+- The directions from `wsa_dirspectrum` and `wsa_directional_parameters` use the
+  Cartesian-to convention by default: positive angles are measured from the
+  positive X-axis in the counterclockwise direction.
+- It is assumed that the input X and Y orbital velocities correspond to the
+  geographic East and North coordinates, respectively, with positive values
+  measured toward the East and North.
 
-- Las frecuencias se expresan en Hz.
-- Las profundidades de sensores bajo el nivel medio se indican con signo
-  negativo, por ejemplo `z_p = -0.5`.
-- En `wsa_spectrum`, la señal se preprocesa removiendo media y tendencia antes
-  de estimar el espectro.
-- En el análisis direccional, la componente de frecuencia cero se excluye del
-  análisis direccional.
-- Las direcciones de `wsa_dirspectrum` y `wsa_directional_parameters` usan por
-  defecto convencion cartesiana-hacia (angulos positivos medidos desde el eje X positivo en dirección contraria a las manecillas del reloj).
-- Se asume que las velocidades orbitales X e Y de entrada corresponde a las coordenadas geográficas Este y Norte, respectivamente. Con valores positivos medidos hacia el Este y Norte.
+## License
 
-## Licencia
-
-Este proyecto se distribuye bajo la licencia incluida en `LICENSE`.
-
-
+This project is distributed under the license included in `LICENSE`.
