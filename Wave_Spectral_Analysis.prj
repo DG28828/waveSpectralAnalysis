@@ -1,13 +1,13 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration file="C:\waveSpectralAnalysis\Wave_Spectral_Analysis.prj" location="C:\waveSpectralAnalysis" name="Wave_Spectral_Analysis" target="target.toolbox" target-name="Package Toolbox">
+  <configuration build-checksum="3443261222" file="C:\waveSpectralAnalysis\Wave_Spectral_Analysis.prj" location="C:\waveSpectralAnalysis" name="Wave_Spectral_Analysis" target="target.toolbox" target-name="Package Toolbox">
     <param.appname>Wave Spectral Analysis</param.appname>
     <param.authnamewatermark>Danny Garro Arias</param.authnamewatermark>
     <param.email>danny.garroarias@ucr.ac.cr</param.email>
     <param.company>Universidad de Costa Rica</param.company>
-    <param.summary>Toolbox de MATLAB para análisis espectral y direccional de oleaje.</param.summary>
-    <param.description>Incluye herramientas para estimar espectros de energía, calcular parámetros espectrales y direccionales, reconstruir espectros direccionales y procesar datos crudos de instrumentos AWAC.</param.description>
+    <param.summary>MATLAB Toolbox for spectral and directional wave analysis.</param.summary>
+    <param.description>It includes tools for estimating energy spectra, calculating spectral and directional parameters, reconstructing directional spectra, and processing raw data from Nortek AWAC instruments.</param.description>
     <param.screenshot>${PROJECT_ROOT}\images\waveSpectralAnalysis.jpg</param.screenshot>
-    <param.version>1.1.0</param.version>
+    <param.version>1.1.1</param.version>
     <param.output>${PROJECT_ROOT}\Wave Spectral Analysis.mltbx</param.output>
     <param.products.name>
       <item>Signal Processing Toolbox</item>
@@ -59,7 +59,7 @@
     <param.getting.started.guide>${PROJECT_ROOT}\toolbox\doc\GettingStarted.mlx</param.getting.started.guide>
     <param.matlabpath.excludes />
     <param.javaclasspath.excludes />
-    <param.exported.on.package>false</param.exported.on.package>
+    <param.exported.on.package>true</param.exported.on.package>
     <param.required.addons />
     <param.matlab.project.id />
     <param.matlab.project.name />
@@ -87,7 +87,6 @@
       <param.docs />
       <param.matlabpath.excludes />
       <param.javaclasspath.excludes />
-      <param.exported.on.package />
       <param.required.addons />
       <param.matlab.project.id />
       <param.matlab.project.name />
