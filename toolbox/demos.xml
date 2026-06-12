@@ -4,7 +4,7 @@
    <type>toolbox</type>
    <icon>HelpIcon.DEMOS</icon>
    <website/>
-   <description>Incluye herramientas para estimar espectros de energía, calcular parámetros espectrales y direccionales, reconstruir espectros direccionales y procesar datos crudos de instrumentos AWAC.</description>
+   <description>It includes tools for estimating energy spectra, calculating spectral and directional parameters, reconstructing directional spectra, and processing raw data from Nortek AWAC instruments.</description>
    <demosection>
       <label>examples</label>
       <demoitem>
