@@ -39,7 +39,7 @@ Note: The AWAC workflow has been tested with a first-generation 1 MHz AWAC.
 
 Detailed usage examples are available as .mlx Live Scripts in the \toolbox\examples folder. A summary of the examples is provided below.
 
-#### Input Data
+### Input Data
 Sample data for the example is included in the \toolbox\example_data folder.
 ```matlab
 data = load('..\example_data\burst_data.mat');
@@ -60,7 +60,7 @@ z_v = cell_position - ast_mean;                               %Measurement depth
 </p>
 
 
-#### Energy Spectra
+### Energy Spectra
 ```matlab
 [out_Spec, info_Spec] = wsa_spectrum(AST, fs, 'DoF', 64);
 f = out_Spec.f;
@@ -70,7 +70,7 @@ S = out_Spec.S;
   <img src="images/spectra.png" alt="Wave Spectra example" width="500">
 </p>
 
-#### Spectral Parameters
+### Spectral Parameters
 
 ```matlab
 out_Spec_Params = wsa_spectral_parameters(out_Spec)
@@ -79,7 +79,7 @@ out_Spec_Params = wsa_spectral_parameters(out_Spec)
   <img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="300">
 </p>
 
-#### Directional Spectra
+### Directional Spectra
 ```matlab
 [out_DirSpec, info_DirSpec] = wsa_dirspectrum(AST, U, V, fs, 'SUV', ...
                                              'z_v', z_v, ...
@@ -92,7 +92,7 @@ E = out_DirSpec.MEM.E;
   <img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
 </p>
 
-#### Directional Parameters
+### Directional Parameters
 ```matlab
 out_Dir_Params = wsa_directional_parameters(out_DirSpec.MEM)
 ```
