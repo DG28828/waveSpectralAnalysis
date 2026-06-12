@@ -55,7 +55,9 @@ mounting_height = data.burst_data.general.mounting_height;    %Equipment mountin
 h   = ast_mean + mounting_height;                             %Seafloor depth.                                            
 z_v = cell_position - ast_mean;                               %Measurement depth for orbital velocities.
 ```
-<img src="images/input_data.png" alt="Input Data example" width="500">
+<p align="center">
+  <img src="images/input_data.png" alt="Input Data example" width="850">
+</p>
 
 
 #### Energy Spectra
@@ -64,16 +66,18 @@ z_v = cell_position - ast_mean;                               %Measurement depth
 f = out_Spec.f;
 S = out_Spec.S;
 ```
-<img src="images/spectra.png" alt="Wave Spectra example" width="500">
-
+<p align="center">
+  <img src="images/spectra.png" alt="Wave Spectra example" width="500">
+</p>
 
 #### Spectral Parameters
 
 ```matlab
 out_Spec_Params = wsa_spectral_parameters(out_Spec)
 ```
-<img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="500">
-
+<p align="center">
+  <img src="images/spectral_parameters.png" alt="Spectral Parameters example" width="300">
+</p>
 
 #### Directional Spectra
 ```matlab
@@ -84,15 +88,17 @@ f = out_DirSpec.MEM.f;
 theta = out_DirSpec.MEM.theta;
 E = out_DirSpec.MEM.E;
 ```
-<img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
-
+<p align="center">
+  <img src="images/directional_spectra.png" alt="Directional Wave Spectra example" width="500">
+</p>
 
 #### Directional Parameters
 ```matlab
 out_Dir_Params = wsa_directional_parameters(out_DirSpec.MEM)
 ```
-<img src="images/directional_parameters.png" alt="Directional Parameters example" width="500">
-
+<p align="center">
+  <img src="images/directional_parameters.png" alt="Directional Parameters example" width="300">
+</p>
 
 ## AWAC
 
