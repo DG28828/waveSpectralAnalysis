@@ -1,5 +1,5 @@
 # Wave Spectral Analysis 
-[![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)     [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20805516.svg)](https://doi.org/10.5281/zenodo.20805516)  [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/DG28828/waveSpectralAnalysis/blob/main/README.md)
+[![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)     [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20805516.svg)](https://doi.org/10.5281/zenodo.20805516)  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DG28828/waveSpectralAnalysis)  [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/DG28828/waveSpectralAnalysis/blob/main/README.md)
 
 
 Toolbox de MATLAB para análisis espectral y direccional de oleaje. Incluye
