@@ -1,5 +1,5 @@
 # Wave Spectral Analysis 
-[![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)     [![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/DG28828/waveSpectralAnalysis/blob/main/README.es.md)
+[![View Wave Spectral Analysis on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/183891-wave-spectral-analysis)     [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20805516.svg)](https://doi.org/10.5281/zenodo.20805516)    [![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/DG28828/waveSpectralAnalysis/blob/main/README.es.md)
 
 MATLAB toolbox for wave spectral and directional analysis. It includes
 tools to estimate energy spectra, compute spectral and directional
