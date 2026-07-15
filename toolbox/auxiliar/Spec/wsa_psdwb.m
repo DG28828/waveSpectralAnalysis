@@ -64,9 +64,11 @@ function [out, info] = wsa_psdwb(X, window, varargin)
 %
 %   Argumentos de salida:
 %   out         - Estructura con:
-%       I           - Estimador de la densidad espectral
-%                   [unidad de X]^2 / rad/muestra
-%       W           - Frecuencias angulares digitales (rad/muestra)
+%       I           -estimador espectral discreto bilateral normalizado.
+%                       [unidad_X]^2 para PSD
+%                       [unidad_X*unidad_Y] para CPSD.
+%
+%       W           - Frecuencia angular digital (rad/muestra)
 %
 %   info        - Estructura con los parámetros finales utilizados:
 %                   M, N, N0, K, Nfft, DoF, window
