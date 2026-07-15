@@ -76,9 +76,8 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %
 %   Argumentos de salida:
 %   out         - Estructura con:
-%       S           - Estimador del espectro de energía unilateral
-%                   [unidad de X]^2 / Hz
-%       f           - Frecuencias físicas (Hz)
+%       S           - Estimador del espectro de energía unilateral ([unidad_X]^2 / Hz)
+%       f           - Frecuencia física (Hz)
 %       Spp         - Espectro de energía de presión sin corregir (si InputType == "pressure")
 %       Kp          - Factor de corrección hidrodinámica          (si InputType == "pressure")
 %       k           - Número de onda asociado a cada frecuencia   (si InputType == "pressure")
@@ -97,12 +96,14 @@ function [out, info] = wsa_spectrum(X, fs, varargin)
 %     veces N (tamaño del segmento enventanado, para mejorar la interpolación
 %     del espectro resultante.
 %
-%   • La conversión de PSD bilateral [X^2 / rad / muestra] a espectro
-%     unilateral [X^2 / Hz] se realiza considerando:
+%   • La conversión del estimador espectral discreto bilateral a espectro
+%     unilateral físico [X^2/Hz] se realiza considerando:
 %
 %         f = fs·W / (2π)
+%         S_f = I / fs
 %
-%     y duplicando todas las componentes excepto la frecuencia cero.
+%     donde W está en rad/muestra y f está en Hz. Además se duplica todas 
+%     las componentes excepto la frecuencia cero.
 %
 %   • Se realiza una validación energética verificando que:
 %
@@ -239,28 +240,34 @@ X = detrend(X - mean(X));
 %   N0: Por defecto N0 = N/2, para un porcentaje de traslape del 50 % que
 %       disminuye la varainza a aproximadamente la mitad (mas traslape no disminuye mas la varianza).
 %   Nfft: la potencia de 2 mayor mas cercana a 5 veces N.
-   
+% 
 K = DoF/2;
 Nfft = 2^nextpow2(5*(2*length(X)/(K+1)));
 [out_pswb, info_psd] = wsa_psdwb(X, window, 'K', K, 'Nfft', Nfft, 'printFlag', printFlag);
 I = out_pswb.I;
 W = out_pswb.W;
 
-%Convertir psd bilateral a espectro unilateral
-% Conversión:
-%   PSD bilateral: [X^2 / rad/muestra]
-%   PSD unilateral: [X^2 / rad/s] = [X^2 / Hz]
+% Convertir estimador espectral discreto bilateral a PSD unilateral física.
+%
+% I      : estimador espectral discreto bilateral [unidad_X^2]
+% W      : frecuencia angular digital [rad/muestra]
+% fs     : frecuencia de muestreo [Hz]
+% S_raw  : PSD unilateral física [unidad_X^2/Hz]
+% f      : frecuencia física [Hz]
+%
+% La conversión a frecuencia física se realiza como:
+%
+%     S_f = I/fs
+%     f   = fs*W/(2*pi)
+%
 S_raw = I(W>=0)/fs;             % Ajustar unidades a la frecuencia física.
 S_raw(2:end) = 2*S_raw(2:end);  % Convertir a unilateral (la componente DC W=0 no se duplica).
 f = fs*W(W>=0)/(2*pi);          %Convertir frecuencia a frecuencia física.
 
-% *Esta conversión es la siguiente:
-%       W:  frecuencia angular digital [rad/muestra]
-%       fs: frecuencia de muestreo [muestra/s]
-%       f:  frecuencia física [rad/s] = [rad/muestra]/[s/muestra]
 
 %Validación energética:
 %   Se verifica el cumplimiento de integral_0_inf(S(f)df) = varianza
+%
 m0 = trapz(f, S_raw);       %El momento de orden cero es el área bajo la curva
 varianza = var(X);          %Varianza de la señal de entrada
 error_relativo = 100*abs(m0-varianza)/varianza;
