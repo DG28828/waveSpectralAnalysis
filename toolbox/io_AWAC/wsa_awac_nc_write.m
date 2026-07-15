@@ -103,6 +103,7 @@ function wsa_awac_nc_write(data, ncfile, varargin)
 %           size_flag
 %           orientation_flag
 %           pressure_flag
+%           pressure_sample_flag
 %           is_bad_burst
 %           bad_tilt_flag
 %           warning_tilt_flag
@@ -145,7 +146,7 @@ function wsa_awac_nc_write(data, ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 19/05/2026
+% Fecha de modificación: 15/07/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -257,14 +258,21 @@ analog_input = zeros(nSamples, nBurst, 'uint8');
 beam_velocity_ms = nan(nSamples, nVel_beams, nBurst);
 amplitude = zeros(nSamples, nVel_beams, nBurst, 'uint8');
 
+% Definir variable nQC para tamaño de flags
+if isfield(data, 'quality') && isfield(data.quality, 'flags')
+    nQC = numel(data.quality.flags);
+else
+    nQC = nBurst;
+end
+
 % Variables de control de calidad
-samples_flag = nan(nBurst,1);
-size_flag = nan(nBurst,1);
-orientation_flag = nan(nBurst,1);
-pressure_flag = nan(nBurst,1);
-is_bad_burst = zeros(nBurst,1);
-bad_tilt_flag = nan(nBurst,1);
-warning_tilt_flag = nan(nBurst,1);
+samples_flag = nan(nQC,1);
+size_flag = nan(nQC,1);
+orientation_flag = nan(nQC,1);
+pressure_flag = nan(nQC,1);
+pressure_sample_flag = nan(nQC,1);
+bad_tilt_flag = nan(nQC,1);
+warning_tilt_flag = nan(nQC,1);
 
 %% Extraer datos
 % En esta sección se extraen los datos del struct de entrada, ya sea data
@@ -348,20 +356,50 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         size_flag(i)        = wsa_get_struct_field(qf, 'size_flag');
         orientation_flag(i) = wsa_get_struct_field(qf, 'orientation_flag');
         pressure_flag(i)    = wsa_get_struct_field(qf, 'pressure_flag');
+        pressure_sample_flag(i)    = wsa_get_struct_field(qf, 'pressure_sample_flag');
         bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
         warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
     end
 end
 
-if isfield(data, 'quality') && isfield(data.quality, 'summary')
-    if isfield(data.quality.summary, 'bad_indices')
-        bad_idx = data.quality.summary.bad_indices;
-        bad_idx = double(bad_idx(:));
-        bad_idx = bad_idx(~isnan(bad_idx));
-        bad_idx = bad_idx(bad_idx >= 1 & bad_idx <= nBurst);
-        is_bad_burst(bad_idx) = 1;
+
+
+% Recuperar flags is_bad_burst aplicada durante la limpieza
+if isfield(data, 'cleaning') && isfield(data.cleaning, 'is_bad_burst')
+    is_bad_burst = logical(data.cleaning.is_bad_burst(:));
+
+elseif isfield(data, 'quality') && isfield(data.quality, 'summary') && isfield(data.quality.summary, 'bad_bursts')
+    is_bad_burst = logical(data.quality.summary.bad_bursts(:));
+
+else
+    warning('No se encontró la máscara is_bad_burst. Se asumirá que ninguna ráfaga fue eliminada.');
+    is_bad_burst = false(nQC,1);
+end
+
+% Verificar longitud respecto a burst_raw
+if numel(is_bad_burst) ~= nQC
+    error('La máscara is_bad_burst contiene %d elementos, pero quality.flags contiene %d elementos.', numel(is_bad_burst), nQC);
+end
+
+% Verificar correspondencia entre burst_raw y burst
+if isfield(data, 'cleaning_status') && data.cleaning_status
+    nGood = sum(~is_bad_burst);
+    if nGood ~= nBurst
+        error('Las banderas de limpieza indican %d ráfagas válidas, pero data.whd y data.wad contienen %d ráfagas.', nGood, nBurst);
+    end
+
+else
+    % En datos sin limpiar, burst y burst_raw deberían coincidir
+    if nQC ~= nBurst
+        error(['Los datos no están marcados como limpios, pero existen ' ...
+               '%d ráfagas en quality.flags y %d en data.whd.'], ...
+               nQC, nBurst);
     end
 end
+
+% Convertir para guardar como double 0/1
+is_bad_burst = double(is_bad_burst);
+
 
 %% Crear dimensiones y variables para netCDF
 % En esta sección se crean las variables para el archivo netCDF, donde se
@@ -415,13 +453,14 @@ end
 
 %-------     Variables dependientes de la dimensión {burst_raw}     -------
 vars1d_burst_raw = {
-    'samples_flag',         samples_flag,       'double',   'bool',       'samples_flag';
-    'size_flag',            size_flag,          'double',   'bool',       'size_flag';
-    'orientation_flag',     orientation_flag,   'double',   'bool',       'orientation_flag';
-    'pressure_flag',        pressure_flag,      'double',   'bool',       'pressure_flag';
-    'is_bad_burst',         is_bad_burst,       'double',   'bool',       'is_bad_burst';
-    'bad_tilt_flag',        bad_tilt_flag,      'double',   'bool',       'bad_tilt_flag';
-    'warning_tilt_flag',    warning_tilt_flag,  'double',   'bool',       'is_bad_burst';
+    'samples_flag',         samples_flag,           'double',   'bool',       'samples_flag';
+    'size_flag',            size_flag,              'double',   'bool',       'size_flag';
+    'orientation_flag',     orientation_flag,       'double',   'bool',       'orientation_flag';
+    'pressure_flag',        pressure_flag,          'double',   'bool',       'pressure_flag';
+    'pressure_sample_flag', pressure_sample_flag,   'double',   'bool',       'pressure_sample_flag';
+    'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
+    'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
+    'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'is_bad_burst';
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};
