@@ -103,6 +103,7 @@ function wsa_awac_nc_write(data, ncfile, varargin)
 %           size_flag
 %           orientation_flag
 %           pressure_flag
+%           pressure_sample_flag
 %           is_bad_burst
 %           bad_tilt_flag
 %           warning_tilt_flag
@@ -269,6 +270,7 @@ samples_flag = nan(nQC,1);
 size_flag = nan(nQC,1);
 orientation_flag = nan(nQC,1);
 pressure_flag = nan(nQC,1);
+pressure_sample_flag = nan(nQC,1);
 bad_tilt_flag = nan(nQC,1);
 warning_tilt_flag = nan(nQC,1);
 
@@ -354,6 +356,7 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         size_flag(i)        = wsa_get_struct_field(qf, 'size_flag');
         orientation_flag(i) = wsa_get_struct_field(qf, 'orientation_flag');
         pressure_flag(i)    = wsa_get_struct_field(qf, 'pressure_flag');
+        pressure_sample_flag(i)    = wsa_get_struct_field(qf, 'pressure_sample_flag');
         bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
         warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
     end
@@ -450,13 +453,14 @@ end
 
 %-------     Variables dependientes de la dimensión {burst_raw}     -------
 vars1d_burst_raw = {
-    'samples_flag',         samples_flag,       'double',   'bool',       'samples_flag';
-    'size_flag',            size_flag,          'double',   'bool',       'size_flag';
-    'orientation_flag',     orientation_flag,   'double',   'bool',       'orientation_flag';
-    'pressure_flag',        pressure_flag,      'double',   'bool',       'pressure_flag';
-    'is_bad_burst',         is_bad_burst,       'double',   'bool',       'is_bad_burst';
-    'bad_tilt_flag',        bad_tilt_flag,      'double',   'bool',       'bad_tilt_flag';
-    'warning_tilt_flag',    warning_tilt_flag,  'double',   'bool',       'is_bad_burst';
+    'samples_flag',         samples_flag,           'double',   'bool',       'samples_flag';
+    'size_flag',            size_flag,              'double',   'bool',       'size_flag';
+    'orientation_flag',     orientation_flag,       'double',   'bool',       'orientation_flag';
+    'pressure_flag',        pressure_flag,          'double',   'bool',       'pressure_flag';
+    'pressure_sample_flag', pressure_sample_flag,   'double',   'bool',       'pressure_sample_flag';
+    'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
+    'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
+    'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'is_bad_burst';
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};
