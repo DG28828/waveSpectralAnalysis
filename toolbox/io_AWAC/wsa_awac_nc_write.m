@@ -188,11 +188,25 @@ fprintf('=============================          Escritura de datos de AWAC a for
 fprintf('\nEscribir datos de archivos de AWAC a formato netCDF.\n');
 
 %Verificar existencia de archivo y sobreescritura
-if exist(ncfile, 'file')
-    if overwrite
+if isfile(ncfile)
+
+    if ~overwrite
+        error('El archivo NetCDF ya existe: %s', ncfile);
+    end
+
+    try
         delete(ncfile);
-    else
-        error('El archivo netcdf ya existe: %s', ncfile);
+    catch ME
+        error(['No fue posible eliminar el archivo NetCDF existente:\n%s\n' ...
+               'Puede estar abierto, bloqueado o no tener permisos de escritura.\n' ...
+               'Mensaje original: %s'], ...
+               ncfile, ME.message);
+    end
+
+    if isfile(ncfile)
+        error(['El archivo NetCDF continúa existiendo después de intentar ' ...
+               'eliminarlo:\n%s\nCierre cualquier programa que lo esté utilizando.'], ...
+               ncfile);
     end
 end
 
@@ -460,7 +474,7 @@ vars1d_burst_raw = {
     'pressure_sample_flag', pressure_sample_flag,   'double',   'bool',       'pressure_sample_flag';
     'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
     'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
-    'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'is_bad_burst';
+    'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'warning_tilt_flag';
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};

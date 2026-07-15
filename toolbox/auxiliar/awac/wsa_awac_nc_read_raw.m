@@ -31,6 +31,7 @@ req_vars = {
     'size_flag'
     'orientation_flag'
     'pressure_flag'
+    'pressure_sample_flag'
     'is_bad_burst'
     'bad_tilt_flag'
     'warning_tilt_flag'
@@ -82,6 +83,7 @@ samples_flag = logical(ncread(ncfile, 'samples_flag'));
 size_flag = logical(ncread(ncfile, 'size_flag'));
 orientation_flag = logical(ncread(ncfile, 'orientation_flag'));
 pressure_flag = logical(ncread(ncfile, 'pressure_flag'));
+pressure_sample_flag = logical(ncread(ncfile, 'pressure_sample_flag'));
 is_bad_burst = logical(ncread(ncfile, 'is_bad_burst'));
 bad_tilt_flag = logical(ncread(ncfile, 'bad_tilt_flag'));
 warning_tilt_flag = logical(ncread(ncfile, 'warning_tilt_flag'));
@@ -173,6 +175,7 @@ for b = 1:nBurst
     data.quality.flags(b).size_flag = size_flag(b);
     data.quality.flags(b).orientation_flag = orientation_flag(b);
     data.quality.flags(b).pressure_flag = pressure_flag(b);
+    data.quality.flags(b).pressure_sample_flag = pressure_sample_flag(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
 end
@@ -185,6 +188,7 @@ data.quality.summary.samples_flag_count = sum(samples_flag);
 data.quality.summary.size_flag_count = sum(size_flag);
 data.quality.summary.orientation_flag_count = sum(orientation_flag);
 data.quality.summary.pressure_flag_count = sum(pressure_flag);
+data.quality.summary.pressure_sample_flag_count = sum(pressure_sample_flag);
 data.quality.summary.bad_tilt_flag_count = sum(bad_tilt_flag);
 data.quality.summary.warning_tilt_flag_count = sum(warning_tilt_flag);
 data.quality.summary.bad_bursts = bad_bursts;
