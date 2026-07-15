@@ -901,7 +901,9 @@ roll    = [data.whd.roll_deg];
 
 
 % 1) Límites absolutos
-bad_tilt_flag = abs(pitch) > pitch_limit | abs(roll) > roll_limit;
+bad_pitch_flag = abs(pitch) > pitch_limit;
+bad_roll_flag = abs(roll) > roll_limit;
+bad_tilt_flag = bad_pitch_flag | bad_roll_flag;
 warning_tilt_flag = abs(pitch) > 5 | abs(roll) > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST y velocidades no serán confiables
 warning_tilt_flag_10 = abs(pitch) > 10 | abs(roll) > 10;
 
@@ -975,11 +977,11 @@ if do_plot
     yline(-roll_limit, ':', 'HandleVisibility','off')
 
     % Bursts malos
-    scatter(burst_counter_vec(orientation_flag), ...
-            pitch(orientation_flag), 40, 'r', 'filled', ...
+    scatter(burst_counter_vec(bad_pitch_flag), ...
+            pitch(bad_pitch_flag), 40, 'r', 'filled', ...
             'DisplayName', 'Burst marcado')
-    scatter(burst_counter_vec(orientation_flag), ...
-            roll(orientation_flag), 40, 'r', 'filled', ...
+    scatter(burst_counter_vec(bad_roll_flag), ...
+            roll(bad_roll_flag), 40, 'r', 'filled', ...
             'HandleVisibility','off')
 
     hold off
