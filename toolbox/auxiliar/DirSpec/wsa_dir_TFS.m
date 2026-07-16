@@ -156,7 +156,7 @@ D_negative_fraction = mean(D_raw < -tol, 2);
 for k = 1:size(D, 1)
     D(k,:) = max(D(k,:), 0);  % 1)
 
-    area_k = sum(D, 2)*dtheta;
+    area_k = sum(D(k, :)) * dtheta;
     if area_k > 0
         D(k,:) = D(k,:) ./ area_k; % 2)
     else
