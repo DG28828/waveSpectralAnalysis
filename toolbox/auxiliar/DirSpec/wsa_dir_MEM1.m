@@ -157,9 +157,8 @@ D_is_pos = all(D_raw(:) >= -nonnegative_tol); %Verificar que D es positivo (teor
 
 % 2) Normalizar la distribución, el área bajo la curva debe ser unitaria
 D = NaN(size(D_raw));
-for k = 1:size(D, 1)
-    D(k, :) = D_raw(k, :)./trapz(theta, D_raw(k, :));
-end
+valid_rows = D_finite_flag & positive_area_flag;
+D(valid_rows, :) = D_raw(valid_rows, :)./D_area_before_normalization(valid_rows);
 
 %% Verificación de posibilidad de doble pico
 % Basado en verificación de "Use of advanced directional wave spectra
