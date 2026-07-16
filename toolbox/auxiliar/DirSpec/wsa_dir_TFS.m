@@ -1,4 +1,4 @@
-function out = wsa_dir_TFS(a1, b1, Ntheta, varargin)
+function [out, info] = wsa_dir_TFS(a1, b1, Ntheta, varargin)
 %wsa_dir_TFS Reconstruye la distribucion direccional mediante serie de Fourier truncada (Truncated Fourier Series).
 %
 % Sintaxis
@@ -137,6 +137,19 @@ end
 
 %%%%%%%% Operaciones finales sobre D %%%%%%%%%
 
+% Verificacion de valores negativos
+D_raw = D;
+
+tol = 1e-8;
+
+D_raw_min = min(D_raw, [], 2);
+
+D_raw_nonnegative_flag = all(D_raw >= -tol, 2);
+
+D_clipping_required_flag = any(D_raw < 0, 2);
+
+D_negative_fraction = mean(D_raw < -tol, 2);
+
 % 1) Se debe tomar solo la parte positiva.
 % 2) Normalizar la distribucion, el area bajo la curva debe ser unitaria
 for k = 1:size(D, 1)
@@ -162,5 +175,15 @@ if use_second_order
 else
     out.order = 1;
 end
+
+% Información
+info = struct();
+
+info.D_raw_nonnegative_flag = D_raw_nonnegative_flag;
+info.D_raw_min_value = D_raw_min;
+info.D_clipping_required_flag = D_clipping_required_flag;
+info.D_negative_fraction = D_negative_fraction;
+info.all_D_raw_nonnegative = all(D_raw_nonnegative_flag);
+info.nonnegative_tolerance = tol;
 
 end
