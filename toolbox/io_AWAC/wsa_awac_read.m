@@ -175,6 +175,7 @@ function data = wsa_awac_read(files_dir, varargin)
 %Valores por defecto
 pitch_limit_default         = 10;    % grados
 roll_limit_default          = 10;    % grados
+tilt_limit_default          = 10;    %grados
 heading_jump_limit_default  = 20;    % cambio brusco entre bursts
 tilt_jump_limit_default     = 5;    % cambio brusco pitch/roll
 min_pressure_limit_default  = 1;     % dbar (casi fuera del agua)
@@ -193,6 +194,7 @@ addRequired(p, 'files_dir');
 %%%%%% Parámetros opcionales %%%%%%
 addParameter(p, 'pitch_limit', pitch_limit_default)
 addParameter(p, 'roll_limit', roll_limit_default)
+addParameter(p, 'tilt_limit', tilt_limit_default)
 addParameter(p, 'heading_jump_limit', heading_jump_limit_default)
 addParameter(p, 'tilt_jump_limit', tilt_jump_limit_default)
 addParameter(p, 'min_pressure_limit', min_pressure_limit_default)
@@ -206,7 +208,8 @@ parse(p, files_dir, varargin{:});
 
 %%%%%%%    Resultados     %%%%%%%%
 pitch_limit         = p.Results.pitch_limit;        
-roll_limit          = p.Results.roll_limit;         
+roll_limit          = p.Results.roll_limit;   
+tilt_limit          = p.Results.tilt_limit; 
 heading_jump_limit  = p.Results.heading_jump_limit;    
 tilt_jump_limit     = p.Results.tilt_jump_limit;
 min_pressure_limit  = p.Results.min_pressure_limit;
@@ -892,22 +895,34 @@ fprintf('\n-------------------          Verificación de orientación de los dat
 fprintf('\nLímites establecidos:\n')
 fprintf('\t-Pitch máximo: %d °\n', pitch_limit)
 fprintf('\t-Roll máximo: %d °\n', roll_limit)
+fprintf('\t-Tilt máximo: %d °\n', tilt_limit)
 fprintf('\t-Cambio máximo en heading: %d °\n', heading_jump_limit)
-fprintf('\t-Cambio máximo en tilt (pitch/roll): %d °\n\n', tilt_jump_limit)
+fprintf('\t-Cambio máximo en tilt: %d °\n\n', tilt_jump_limit)
 
 heading = [data.whd.heading_deg];
 pitch   = [data.whd.pitch_deg];
 roll    = [data.whd.roll_deg];
 
+% Inclinación total del eje Z del instrumento respecto
+% de la vertical.
+cos_tilt = cosd(pitch).*cosd(roll);
+
+% Protección frente a errores numéricos de redondeo
+cos_tilt = max(-1, min(1, cos_tilt));
+
+tilt = acosd(cos_tilt);
 
 % 1) Límites absolutos
 bad_pitch_flag = abs(pitch) > pitch_limit;
 bad_roll_flag = abs(roll) > roll_limit;
-bad_tilt_flag = bad_pitch_flag | bad_roll_flag;
-warning_tilt_flag = abs(pitch) > 5 | abs(roll) > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST y velocidades no serán confiables
-warning_tilt_flag_10 = abs(pitch) > 10 | abs(roll) > 10;
+bad_tilt_flag = tilt > tilt_limit;
+warning_tilt_flag = tilt > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST no será confiable.
+warning_tilt_flag_10 = tilt > 10;         % Si tilt es mayor a 10° guardar flag de warning, ya que AST es inutilizable.
+warning_tilt_flag_20 = tilt > 20;         % Si tilt es mayor a 20° guardar flag de warning, ya que todas las mediciones son inutilizables.
 
 % 2) Cambios bruscos entre bursts
+
+% Cambios individuales
 d_heading = abs(diff(heading));
 d_pitch   = abs(diff(pitch));
 d_roll    = abs(diff(roll));
@@ -915,27 +930,51 @@ d_roll    = abs(diff(roll));
 % Corregir wrapping de heading (0–360)
 d_heading = min(d_heading, 360 - d_heading);
 
-bad_jump = [false, ...
-    d_heading > heading_jump_limit | ...
-    d_pitch   > tilt_jump_limit    | ...
-    d_roll    > tilt_jump_limit];
+% Cambio en la magnitud absoluta del tilt
+d_tilt_magnitude = abs(diff(tilt));
 
-orientation_flag = bad_jump';
+% Vectores unitarios del eje Z del instrumento.
+% Heading se omite porque se controla independientemente.
+z_x = sind(pitch).*cosd(roll);
+z_y = -sind(roll);
+z_z = cosd(pitch).*cosd(roll);
+
+% Producto punto entre orientaciones consecutivas
+dot_z = z_x(1:end-1).*z_x(2:end) + ...
+        z_y(1:end-1).*z_y(2:end) + ...
+        z_z(1:end-1).*z_z(2:end);
+
+% Protección numérica para acosd
+dot_z = max(-1, min(1, dot_z));
+
+% Cambio angular de la inclinación
+d_tilt_axis = acosd(dot_z);
+
+% Flags de jump, separados
+heading_jump_flag = [false, d_heading > heading_jump_limit];
+tilt_jump_flag = [false, d_tilt_axis > tilt_jump_limit];
+
+% Flag general de orientación
+orientation_flag = (heading_jump_flag | tilt_jump_flag)';
 
 % Guardar flags
 for b = 1:nBursts_whd
     data.quality.flags(b).orientation_flag = orientation_flag(b);
     data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
+    data.quality.flags(b).warning_tilt_flag_10 = warning_tilt_flag_10(b);
+    data.quality.flags(b).warning_tilt_flag_20 = warning_tilt_flag_20(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
-        fprintf('Burst %d presenta problemas de orientación. Cambio en heading, pitch o roll mayor al límite establecido.\n', b)
+        fprintf('Burst %d presenta problemas de orientación. Cambio en heading o tilt mayor al límite establecido.\n', b)
     end
 
     if warning_tilt_flag(b)
-        if warning_tilt_flag_10(b)
-            fprintf('Burst %d presenta un tilt mayor a 10°, mediciones AST y velocidades podrían ser inutilizables.\n', b)
+        if warning_tilt_flag_20(b)
+            fprintf('Burst %d presenta un tilt mayor a 20°, todas las mediciones podrían ser inutilizables.\n', b)
+        elseif warning_tilt_flag_10(b)
+            fprintf('Burst %d presenta un tilt mayor a 10°, las mediciones AST podrían ser inutilizables.\n', b)
         else
-            fprintf('Burst %d presenta un tilt mayor a 5°, mediciones AST y velocidades podrían no ser confiables.\n', b)
+            fprintf('Burst %d presenta un tilt mayor a 5°, las mediciones AST podrían no ser confiables.\n', b)
         end
     end
 end
@@ -956,6 +995,8 @@ if do_plot
     d_heading_plot = [NaN, d_heading];
     d_pitch_plot   = [NaN, d_pitch];
     d_roll_plot    = [NaN, d_roll];
+    d_tilt_magnitude_plot = [NaN, d_tilt_magnitude];
+    d_tilt_axis_plot      = [NaN, d_tilt_axis];
 
     f = figure('Name','Verificación de orientación','Color','w');
     f.Position = [1, 1, 1900, 1000];
@@ -968,20 +1009,26 @@ if do_plot
     yl = ylabel('Ángulo (°)');
 
     plot(burst_counter_vec, heading, '-', 'DisplayName', 'Heading')
-    plot(burst_counter_vec, pitch, '-', 'DisplayName', 'Pitch')
-    plot(burst_counter_vec, roll, '-', 'DisplayName', 'Roll')
+    % plot(burst_counter_vec, pitch, '-', 'DisplayName', 'Pitch')
+    % plot(burst_counter_vec, roll, '-', 'DisplayName', 'Roll')
+    plot(burst_counter_vec, tilt, '-', 'DisplayName', 'Tilt')
 
-    yline(pitch_limit, '--', 'DisplayName', 'Límite pitch')
-    yline(-pitch_limit, '--', 'HandleVisibility','off')
-    yline(roll_limit, ':', 'DisplayName', 'Límite roll')
-    yline(-roll_limit, ':', 'HandleVisibility','off')
+    %yline(pitch_limit, '--', 'DisplayName', 'Límite pitch')
+    %yline(-pitch_limit, '--', 'HandleVisibility','off')
+    %yline(roll_limit, ':', 'DisplayName', 'Límite roll')
+    %yline(-roll_limit, ':', 'HandleVisibility','off')
+    yline(tilt_limit, '--', 'DisplayName', 'Límite Tilt')
+    %yline(-tilt_limit, '--', 'HandleVisibility','off')
 
     % Bursts malos
-    scatter(burst_counter_vec(bad_pitch_flag), ...
-            pitch(bad_pitch_flag), 40, 'r', 'filled', ...
-            'DisplayName', 'Burst marcado')
-    scatter(burst_counter_vec(bad_roll_flag), ...
-            roll(bad_roll_flag), 40, 'r', 'filled', ...
+    % scatter(burst_counter_vec(bad_pitch_flag), ...
+    %         pitch(bad_pitch_flag), 40, 'r', 'filled', ...
+    %         'DisplayName', 'Burst marcado')
+    % scatter(burst_counter_vec(bad_roll_flag), ...
+    %         roll(bad_roll_flag), 40, 'r', 'filled', ...
+    %         'HandleVisibility','off')
+    scatter(burst_counter_vec(bad_tilt_flag), ...
+            tilt(bad_tilt_flag), 40, 'r', 'filled', ...
             'HandleVisibility','off')
 
     hold off
@@ -1000,20 +1047,24 @@ if do_plot
     yl = ylabel('\Delta ángulo (°)');
 
     plot(burst_counter_vec, d_heading_plot, '-', 'DisplayName', '\Delta Heading')
-    plot(burst_counter_vec, d_pitch_plot, '-', 'DisplayName', '\Delta Pitch')
-    plot(burst_counter_vec, d_roll_plot, '-', 'DisplayName', '\Delta Roll')
+    % plot(burst_counter_vec, d_pitch_plot, '-', 'DisplayName', '\Delta Pitch')
+    % plot(burst_counter_vec, d_roll_plot, '-', 'DisplayName', '\Delta Roll')
+    plot(burst_counter_vec, d_tilt_axis_plot, '-', 'DisplayName', '\Delta Tilt')
 
     yline(heading_jump_limit, '--', 'DisplayName', 'Límite salto heading')
     yline(tilt_jump_limit, ':', 'DisplayName', 'Límite salto tilt')
 
-    scatter(burst_counter_vec(orientation_flag), ...
-            d_heading_plot(orientation_flag), 40, 'r', 'filled', ...
+    scatter(burst_counter_vec(heading_jump_flag), ...
+            d_heading_plot(heading_jump_flag), 40, 'r', 'filled', ...
             'DisplayName', 'Burst marcado')
-    scatter(burst_counter_vec(orientation_flag), ...
-            d_pitch_plot(orientation_flag), 40, 'r', 'filled', ...
-            'HandleVisibility','off')
-    scatter(burst_counter_vec(orientation_flag), ...
-            d_roll_plot(orientation_flag), 40, 'r', 'filled', ...
+    % scatter(burst_counter_vec(orientation_flag), ...
+    %         d_pitch_plot(orientation_flag), 40, 'r', 'filled', ...
+    %         'HandleVisibility','off')
+    % scatter(burst_counter_vec(orientation_flag), ...
+    %         d_roll_plot(orientation_flag), 40, 'r', 'filled', ...
+    %         'HandleVisibility','off')
+    scatter(burst_counter_vec(tilt_jump_flag), ...
+            d_tilt_axis_plot(tilt_jump_flag), 40, 'r', 'filled', ...
             'HandleVisibility','off')
 
     hold off
