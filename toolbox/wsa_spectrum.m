@@ -276,7 +276,7 @@ error_relativo = 100*abs(m0-varianza)/varianza;
 delta_f = fs/info_psd.N;
 delta_t = 1/delta_f;
 
-%Inicializar struct para guaradar salidas
+%Inicializar struct para guardar salidas
 out = struct; 
 out.f = f;
 info = info_psd;
