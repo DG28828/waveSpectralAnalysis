@@ -912,6 +912,11 @@ cos_tilt = max(-1, min(1, cos_tilt));
 
 tilt = acosd(cos_tilt);
 
+%Guardar tilt como salida en data
+for k = 1:numel(data.whd)
+    data.whd(k).tilt_deg = tilt(k);
+end
+
 % 1) Límites absolutos
 bad_pitch_flag = abs(pitch) > pitch_limit;
 bad_roll_flag = abs(roll) > roll_limit;
@@ -959,6 +964,8 @@ orientation_flag = (heading_jump_flag | tilt_jump_flag)';
 
 % Guardar flags
 for b = 1:nBursts_whd
+    data.quality.flags(b).heading_jump_flag = heading_jump_flag(b);
+    data.quality.flags(b).tilt_jump_flag = tilt_jump_flag(b);
     data.quality.flags(b).orientation_flag = orientation_flag(b);
     data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
     data.quality.flags(b).warning_tilt_flag_10 = warning_tilt_flag_10(b);
