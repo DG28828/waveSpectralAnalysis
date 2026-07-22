@@ -35,7 +35,7 @@ req_vars = {
     'pressure_sample_flag'
     'is_bad_burst'
     'bad_tilt_flag'
-    'warning_tilt_flag'
+    'warning_tilt_flag_5'
     'warning_tilt_flag_10'
     'warning_tilt_flag_20'
     'transformation_matrix'
@@ -90,7 +90,7 @@ pressure_flag = logical(ncread(ncfile, 'pressure_flag'));
 pressure_sample_flag = logical(ncread(ncfile, 'pressure_sample_flag'));
 is_bad_burst = logical(ncread(ncfile, 'is_bad_burst'));
 bad_tilt_flag = logical(ncread(ncfile, 'bad_tilt_flag'));
-warning_tilt_flag = logical(ncread(ncfile, 'warning_tilt_flag'));
+warning_tilt_flag_5 = logical(ncread(ncfile, 'warning_tilt_flag_5'));
 warning_tilt_flag_10 = logical(ncread(ncfile, 'warning_tilt_flag_10'));
 warning_tilt_flag_20 = logical(ncread(ncfile, 'warning_tilt_flag_20'));
 
@@ -184,7 +184,7 @@ for b = 1:nBurst
     data.quality.flags(b).pressure_flag = pressure_flag(b);
     data.quality.flags(b).pressure_sample_flag = pressure_sample_flag(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
-    data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
+    data.quality.flags(b).warning_tilt_flag_5 = warning_tilt_flag_5(b);
     data.quality.flags(b).warning_tilt_flag_10 = warning_tilt_flag_10(b);
     data.quality.flags(b).warning_tilt_flag_20 = warning_tilt_flag_20(b);
 end
@@ -199,7 +199,7 @@ data.quality.summary.orientation_flag_count = sum(orientation_flag);
 data.quality.summary.pressure_flag_count = sum(pressure_flag);
 data.quality.summary.pressure_sample_flag_count = sum(pressure_sample_flag);
 data.quality.summary.bad_tilt_flag_count = sum(bad_tilt_flag);
-data.quality.summary.warning_tilt_flag_count = sum(warning_tilt_flag);
+data.quality.summary.warning_tilt_flag_count = sum(warning_tilt_flag_5);
 data.quality.summary.warning_tilt_flag_10_count = sum(warning_tilt_flag_10);
 data.quality.summary.warning_tilt_flag_20_count = sum(warning_tilt_flag_20);
 data.quality.summary.bad_bursts = bad_bursts;
