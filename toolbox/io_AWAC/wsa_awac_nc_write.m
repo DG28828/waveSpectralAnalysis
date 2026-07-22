@@ -378,7 +378,7 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
         warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
         warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_10');
-        warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_20');
+        warning_tilt_flag_20(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_20');
     end
 end
 
