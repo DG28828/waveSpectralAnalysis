@@ -173,9 +173,9 @@ function data = wsa_awac_read(files_dir, varargin)
 %% Manejo de entradas
 
 %Valores por defecto
-pitch_limit_default         = 10;    % grados
-roll_limit_default          = 10;    % grados
-tilt_limit_default          = 10;    %grados
+%pitch_limit_default         = 10;    % grados
+%roll_limit_default          = 10;    % grados
+tilt_limit_default          = 30;    %grados (Límite máximo del manual)
 heading_jump_limit_default  = 20;    % cambio brusco entre bursts
 tilt_jump_limit_default     = 5;    % cambio brusco pitch/roll
 min_pressure_limit_default  = 1;     % dbar (casi fuera del agua)
@@ -192,8 +192,8 @@ addRequired(p, 'files_dir');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%% Parámetros opcionales %%%%%%
-addParameter(p, 'pitch_limit', pitch_limit_default)
-addParameter(p, 'roll_limit', roll_limit_default)
+%addParameter(p, 'pitch_limit', pitch_limit_default)
+%addParameter(p, 'roll_limit', roll_limit_default)
 addParameter(p, 'tilt_limit', tilt_limit_default)
 addParameter(p, 'heading_jump_limit', heading_jump_limit_default)
 addParameter(p, 'tilt_jump_limit', tilt_jump_limit_default)
@@ -207,8 +207,8 @@ addParameter(p, 'save_plot_dir', save_plot_dir_default)
 parse(p, files_dir, varargin{:});
 
 %%%%%%%    Resultados     %%%%%%%%
-pitch_limit         = p.Results.pitch_limit;        
-roll_limit          = p.Results.roll_limit;   
+%pitch_limit         = p.Results.pitch_limit;        
+%roll_limit          = p.Results.roll_limit;   
 tilt_limit          = p.Results.tilt_limit; 
 heading_jump_limit  = p.Results.heading_jump_limit;    
 tilt_jump_limit     = p.Results.tilt_jump_limit;
@@ -893,8 +893,8 @@ end
 fprintf('\n-------------------          Verificación de orientación de los datos (Heave, Pitch y Roll)         -------------------\n');
 
 fprintf('\nLímites establecidos:\n')
-fprintf('\t-Pitch máximo: %d °\n', pitch_limit)
-fprintf('\t-Roll máximo: %d °\n', roll_limit)
+%fprintf('\t-Pitch máximo: %d °\n', pitch_limit)
+%fprintf('\t-Roll máximo: %d °\n', roll_limit)
 fprintf('\t-Tilt máximo: %d °\n', tilt_limit)
 fprintf('\t-Cambio máximo en heading: %d °\n', heading_jump_limit)
 fprintf('\t-Cambio máximo en tilt: %d °\n\n', tilt_jump_limit)
@@ -918,10 +918,10 @@ for k = 1:numel(data.whd)
 end
 
 % 1) Límites absolutos
-bad_pitch_flag = abs(pitch) > pitch_limit;
-bad_roll_flag = abs(roll) > roll_limit;
+%bad_pitch_flag = abs(pitch) > pitch_limit;
+%bad_roll_flag = abs(roll) > roll_limit;
 bad_tilt_flag = tilt > tilt_limit;
-warning_tilt_flag = tilt > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST no será confiable.
+warning_tilt_flag_5 = tilt > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST no será confiable.
 warning_tilt_flag_10 = tilt > 10;         % Si tilt es mayor a 10° guardar flag de warning, ya que AST es inutilizable.
 warning_tilt_flag_20 = tilt > 20;         % Si tilt es mayor a 20° guardar flag de warning, ya que todas las mediciones son inutilizables.
 
@@ -960,22 +960,22 @@ heading_jump_flag = [false, d_heading > heading_jump_limit];
 tilt_jump_flag = [false, d_tilt_axis > tilt_jump_limit];
 
 % Flag general de orientación
-orientation_flag = (heading_jump_flag | tilt_jump_flag)';
+orientation_flag = (bad_tilt_flag | heading_jump_flag | tilt_jump_flag)';
 
 % Guardar flags
 for b = 1:nBursts_whd
     data.quality.flags(b).heading_jump_flag = heading_jump_flag(b);
     data.quality.flags(b).tilt_jump_flag = tilt_jump_flag(b);
     data.quality.flags(b).orientation_flag = orientation_flag(b);
-    data.quality.flags(b).warning_tilt_flag = warning_tilt_flag(b);
+    data.quality.flags(b).warning_tilt_flag_5 = warning_tilt_flag_5(b);
     data.quality.flags(b).warning_tilt_flag_10 = warning_tilt_flag_10(b);
     data.quality.flags(b).warning_tilt_flag_20 = warning_tilt_flag_20(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
-        fprintf('Burst %d presenta problemas de orientación. Cambio en heading o tilt mayor al límite establecido.\n', b)
+        fprintf('Burst %d presenta problemas de orientación. Tilt, cambio en heading o cambio en tilt mayor al límite establecido.\n', b)
     end
 
-    if warning_tilt_flag(b)
+    if warning_tilt_flag_5(b)
         if warning_tilt_flag_20(b)
             fprintf('Burst %d presenta un tilt mayor a 20°, todas las mediciones podrían ser inutilizables.\n', b)
         elseif warning_tilt_flag_10(b)

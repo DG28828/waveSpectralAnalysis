@@ -287,7 +287,7 @@ orientation_flag = nan(nQC,1);
 pressure_flag = nan(nQC,1);
 pressure_sample_flag = nan(nQC,1);
 bad_tilt_flag = nan(nQC,1);
-warning_tilt_flag = nan(nQC,1);
+warning_tilt_flag_5 = nan(nQC,1);
 warning_tilt_flag_10 = nan(nQC,1);
 warning_tilt_flag_20 = nan(nQC,1);
 
@@ -376,7 +376,7 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         pressure_flag(i)    = wsa_get_struct_field(qf, 'pressure_flag');
         pressure_sample_flag(i)    = wsa_get_struct_field(qf, 'pressure_sample_flag');
         bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
-        warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
+        warning_tilt_flag_5(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_5');
         warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_10');
         warning_tilt_flag_20(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_20');
     end
@@ -481,7 +481,7 @@ vars1d_burst_raw = {
     'pressure_sample_flag', pressure_sample_flag,   'double',   'bool',       'pressure_sample_flag';
     'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
     'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
-    'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'warning_tilt_flag';
+    'warning_tilt_flag_5',    warning_tilt_flag_5,      'double',   'bool',       'warning_tilt_flag_5';
     'warning_tilt_flag_10',    warning_tilt_flag_10,      'double',   'bool',       'warning_tilt_flag_10';
     'warning_tilt_flag_20',    warning_tilt_flag_20,      'double',   'bool',       'warning_tilt_flag_20';
     };
