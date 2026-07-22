@@ -255,6 +255,7 @@ sound_speed_ms  = nan(nBurst,1);
 heading_deg     = nan(nBurst,1);
 pitch_deg       = nan(nBurst,1);
 roll_deg        = nan(nBurst,1);
+tilt_deg        = nan(nBurst,1);
 min_pressure_dbar = nan(nBurst,1);
 max_pressure_dbar = nan(nBurst,1);
 temperature_degC = nan(nBurst,1);
@@ -287,6 +288,8 @@ pressure_flag = nan(nQC,1);
 pressure_sample_flag = nan(nQC,1);
 bad_tilt_flag = nan(nQC,1);
 warning_tilt_flag = nan(nQC,1);
+warning_tilt_flag_10 = nan(nQC,1);
+warning_tilt_flag_20 = nan(nQC,1);
 
 %% Extraer datos
 % En esta sección se extraen los datos del struct de entrada, ya sea data
@@ -310,6 +313,7 @@ for i = 1:nBurst
     heading_deg(i)          = wsa_get_struct_field(wi, 'heading_deg');
     pitch_deg(i)            = wsa_get_struct_field(wi, 'pitch_deg');
     roll_deg(i)             = wsa_get_struct_field(wi, 'roll_deg');
+    tilt_deg(i)             = wsa_get_struct_field(wi, 'tilt_deg');
     min_pressure_dbar(i)    = wsa_get_struct_field(wi, 'min_pressure_dbar');
     max_pressure_dbar(i)    = wsa_get_struct_field(wi, 'max_pressure_dbar');
     temperature_degC(i)     = wsa_get_struct_field(wi, 'temperature_degC');
@@ -373,6 +377,8 @@ if isfield(data, 'quality') && isfield(data.quality, 'flags')
         pressure_sample_flag(i)    = wsa_get_struct_field(qf, 'pressure_sample_flag');
         bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
         warning_tilt_flag(i)= wsa_get_struct_field(qf, 'warning_tilt_flag');
+        warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_10');
+        warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_20');
     end
 end
 
@@ -442,6 +448,7 @@ vars1d_burst = {
     'heading',              heading_deg,        'double',   'degree',     'heading_deg';                %whd
     'pitch',                pitch_deg,          'double',   'degree',     'pitch_deg';                  %whd
     'roll',                 roll_deg,           'double',   'degree',     'roll_deg';                   %whd
+    'tilt',                 tilt_deg,           'double',   'degree',     'tilt_deg';                   %whd
     'min_pressure',         min_pressure_dbar,  'double',   'dbar',       'min_pressure_dbar';          %whd
     'max_pressure',         max_pressure_dbar,  'double',   'dbar',       'max_pressure_dbar';          %whd
     'temperature',          temperature_degC,   'double',   'degree_C',   'temperature_degC';           %whd
@@ -475,6 +482,8 @@ vars1d_burst_raw = {
     'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
     'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
     'warning_tilt_flag',    warning_tilt_flag,      'double',   'bool',       'warning_tilt_flag';
+    'warning_tilt_flag_10',    warning_tilt_flag_10,      'double',   'bool',       'warning_tilt_flag_10';
+    'warning_tilt_flag_20',    warning_tilt_flag_20,      'double',   'bool',       'warning_tilt_flag_20';
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};
