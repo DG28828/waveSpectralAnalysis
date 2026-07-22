@@ -1024,6 +1024,7 @@ if do_plot
     %yline(-pitch_limit, '--', 'HandleVisibility','off')
     %yline(roll_limit, ':', 'DisplayName', 'Límite roll')
     %yline(-roll_limit, ':', 'HandleVisibility','off')
+    yline(10, ':', 'DisplayName', 'Límite Tilt para AST')
     yline(tilt_limit, '--', 'DisplayName', 'Límite Tilt')
     %yline(-tilt_limit, '--', 'HandleVisibility','off')
 
@@ -1034,9 +1035,12 @@ if do_plot
     % scatter(burst_counter_vec(bad_roll_flag), ...
     %         roll(bad_roll_flag), 40, 'r', 'filled', ...
     %         'HandleVisibility','off')
+    scatter(burst_counter_vec(warning_tilt_flag_10), ...
+            tilt(warning_tilt_flag_10), 40, 'o', 'filled', ...
+            'DisplayName', 'Burst marcado para AST')
     scatter(burst_counter_vec(bad_tilt_flag), ...
             tilt(bad_tilt_flag), 40, 'r', 'filled', ...
-            'HandleVisibility','off')
+            'DisplayName', 'Burst marcado')
 
     hold off
     l = legend('Location','best');
