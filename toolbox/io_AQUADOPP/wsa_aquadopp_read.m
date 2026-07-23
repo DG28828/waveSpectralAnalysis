@@ -8,7 +8,7 @@ function data = wsa_aquadopp_read(files_dir, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 22/07/2026
-% Fecha de modificación: 22/07/2026
+% Fecha de modificación: 23/07/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -137,6 +137,7 @@ hdr_txt = fileread(file_hdr);
 %-------------------------------------------------------------------------%
 %----------                Información general                  ----------%
 general = struct();
+general.Number_of_measurements      = wsa_getNumField(hdr_txt, 'Number of measurements');
 general.Number_of_checksum_errors   = wsa_getNumField(hdr_txt, 'Number of checksum errors');
 general.Time_of_first_measurement   = wsa_getDateField(hdr_txt, 'Time of first measurement');
 general.Time_of_last_measurement    = wsa_getDateField(hdr_txt, 'Time of last measurement');
@@ -154,40 +155,33 @@ end
 %-------------------------------------------------------------------------%
 %----------                Información de Setup                 ----------%
 setup = struct();
-
-% setup.Profile_interval_s          = wsa_getNumField(hdr_txt, 'Profile interval');
-% setup.Number_of_cells             = wsa_getNumField(hdr_txt, 'Number of cells');
-% setup.Cell_size_m                 = wsa_getNumField(hdr_txt, 'Cell size') / 100;   % cm -> m
 setup.Measurement_interval_s      = wsa_getNumField(hdr_txt, 'Measurement interval');   % +
-setup.Sampling_rate               = wsa_getStrField(hdr_txt, 'Sampling rate');          % +
+setup.Sampling_mode               = wsa_getStrField(hdr_txt, 'Sampling rate');          % +
+
 setup.Average_interval_s          = wsa_getNumField(hdr_txt, 'Average interval');       % =
 setup.Measurement_load_percent    = wsa_getNumField(hdr_txt, 'Measurement load');       % =
 setup.Transmit_pulse_length_m     = wsa_getNumField(hdr_txt, 'Transmit pulse length');  % =
 setup.Blanking_distance_m         = wsa_getNumField(hdr_txt, 'Blanking distance');      % =
 setup.Compass_update_rate_s       = wsa_getNumField(hdr_txt, 'Compass update rate');    % =
 
-% setup.Wave_measurements           = wsa_getStrField(hdr_txt, 'Wave measurements');
 setup.Diagnostics_measurements    = wsa_getStrField(hdr_txt, 'Diagnostics measurements');% +
-% setup.Wave_Powerlevel             = wsa_getStrField(hdr_txt, 'Wave - Powerlevel');
-% setup.Wave_Interval_s             = wsa_getNumField(hdr_txt, 'Wave - Interval');
 setup.Diagnostics_Interval_s      = wsa_getNumField(hdr_txt, 'Diagnostics - Interval'); % +
 setup.Diagnostics_Number_of_samples  = wsa_getNumField(hdr_txt, 'Diagnostics - Number of samples'); % +
 setup.Diagnostics_Cell_number     = wsa_getNumField(hdr_txt, 'Diagnostics - Cell number'); % +
 setup.Diagnostics_Number_of_pings      = wsa_getNumField(hdr_txt, 'Diagnostics - Number of pings'); % +
 
-% setup.Wave_Sampling_rate_Hz       = wsa_getNumField(hdr_txt, 'Wave - Sampling rate');
-% setup.Wave_SUV_data_collection    = wsa_getStrField(hdr_txt, 'Wave - SUV data collection');
-% setup.Wave_Ice_data_collection    = wsa_getStrField(hdr_txt, 'Wave - Ice data collection');
-% setup.Onboard_wave_processing     = wsa_getStrField(hdr_txt, 'Onboard wave processing');
+setup.Diagnostics_Sampling_interval_s = NaN;
+setup.Diagnostics_Sampling_rate_Hz    = NaN;
+setup.Diagnostics_burst_duration_s    = NaN;
+setup.Diagnostics_Nyquist_frequency_Hz = NaN;
+setup.Diagnostics_frequency_resolution_Hz = NaN;
 
 setup.Analog_input_1              = wsa_getStrField(hdr_txt, 'Analog input 1');     % =
-% setup.Analog_input_2              = wsa_getStrField(hdr_txt, 'Analog input 2');
 setup.External_input_2            = wsa_getStrField(hdr_txt, 'External input 2');   % +
 setup.External_input_3            = wsa_getStrField(hdr_txt, 'External input 3');   % +
 setup.Power_output                = wsa_getStrField(hdr_txt, 'Power output');       % =
 setup.Powerlevel                  = wsa_getStrField(hdr_txt, 'Powerlevel');         % =
 setup.Coordinate_system           = wsa_getStrField(hdr_txt, 'Coordinate system');  % =
-%setup.Sound_speed_mode            = wsa_getStrField(hdr_txt, 'Sound speed');
 setup.Salinity_ppt                = wsa_getNumField(hdr_txt, 'Salinity');           % =
 setup.Distance_between_pings_m    = wsa_getNumField(hdr_txt, 'Distance between pings');     % =
 setup.Number_of_beams             = wsa_getNumField(hdr_txt, 'Number of beams');    % =
@@ -201,6 +195,14 @@ setup.Start_command               = wsa_getTextField(hdr_txt, 'Start command'); 
 setup.CRC_download                = wsa_getStrField(hdr_txt, 'CRC download');       % =
 
 %Calculado
+
+if ~isnat(general.Time_of_first_measurement) && ~isnat(general.Time_of_last_measurement) && isfinite(setup.Diagnostics_Interval_s) && setup.Diagnostics_Interval_s > 0
+    total_seconds = seconds( general.Time_of_last_measurement - general.Time_of_first_measurement);
+    setup.Expected_number_of_diagnostic_bursts = floor(total_seconds / setup.Diagnostics_Interval_s) + 1;
+else
+    setup.Expected_number_of_diagnostic_bursts = NaN;
+end
+
 % Derivadas útiles
 setup.Wave_Sampling_rate_Hz = 0;
 
@@ -213,6 +215,7 @@ else
     setup.Wave_Nyquist_frequency_Hz = NaN;
     setup.Wave_frequency_resolution_Hz = NaN;
 end
+
 if ~isnat(general.Time_of_first_measurement) && ~isnat(general.Time_of_last_measurement) ...
         && ~isnan(setup.Measurement_interval_s) && setup.Measurement_interval_s > 0
     total_seconds = seconds(general.Time_of_last_measurement - general.Time_of_first_measurement);
@@ -376,7 +379,7 @@ end
 
 
 N = size(dat,1);
-wave_info(N,1) = struct();
+regular_data(N,1) = struct();
 
 % Índices de columnas .dat según el .hdr
 c_dat.month            = wsa_find_column(dat_format, 'Month');
@@ -385,28 +388,33 @@ c_dat.year             = wsa_find_column(dat_format, 'Year');
 c_dat.hour             = wsa_find_column(dat_format, 'Hour');
 c_dat.minute           = wsa_find_column(dat_format, 'Minute');
 c_dat.second           = wsa_find_column(dat_format, 'Second');
-c_dat.burst_counter    = wsa_find_column(dat_format, 'Burst counter');
-c_dat.n_wave_records   = wsa_find_column(dat_format, 'No of wave data records');
-c_dat.cell_position    = wsa_find_column(dat_format, 'Cell position');
+
+c_dat.error_code    = wsa_find_column(dat_format, 'Error code'); % +
+c_dat.status_code    = wsa_find_column(dat_format, 'Status code'); % +
+c_dat.vel1    = wsa_find_column(dat_format, 'Velocity (Beam1'); % +
+c_dat.vel2    = wsa_find_column(dat_format, 'Velocity (Beam2'); % +
+c_dat.vel3    = wsa_find_column(dat_format, 'Velocity (Beam3'); % +
+c_dat.amp1    = wsa_find_column(dat_format, 'Amplitude (Beam1'); % +
+c_dat.amp2    = wsa_find_column(dat_format, 'Amplitude (Beam2'); % +
+c_dat.amp3    = wsa_find_column(dat_format, 'Amplitude (Beam3'); % +
+
 c_dat.battery_voltage  = wsa_find_column(dat_format, 'Battery voltage');
 c_dat.sound_speed      = wsa_find_column(dat_format, 'Soundspeed');
 c_dat.heading          = wsa_find_column(dat_format, 'Heading');
 c_dat.pitch            = wsa_find_column(dat_format, 'Pitch');
 c_dat.roll             = wsa_find_column(dat_format, 'Roll');
-c_dat.min_pressure     = wsa_find_column(dat_format, 'Minimum pressure');
-c_dat.max_pressure     = wsa_find_column(dat_format, 'Maximum pressure');
+
+c_dat.pressure    = wsa_find_column(dat_format, 'Pressure'); % +
+
 c_dat.temperature      = wsa_find_column(dat_format, 'Temperature');
-c_dat.cell_size        = wsa_find_column(dat_format, 'CellSize');
-c_dat.noise_amp_b1     = wsa_find_column(dat_format, 'Noise amplitude beam 1');
-c_dat.noise_amp_b2     = wsa_find_column(dat_format, 'Noise amplitude beam 2');
-c_dat.noise_amp_b3     = wsa_find_column(dat_format, 'Noise amplitude beam 3');
-c_dat.noise_amp_b4     = wsa_find_column(dat_format, 'Noise amplitude beam 4');
-c_dat.ast_start        = wsa_find_column(dat_format, 'AST window start');
-c_dat.ast_size         = wsa_find_column(dat_format, 'AST window size');
-c_dat.ast_offset       = wsa_find_column(dat_format, 'AST window offset');
+
+c_dat.analog1      = wsa_find_column(dat_format, 'Analog input 1'); % +
+c_dat.analog2      = wsa_find_column(dat_format, 'Analog input 2'); % +
+c_dat.speed      = wsa_find_column(dat_format, 'Speed'); % +
+c_dat.direction      = wsa_find_column(dat_format, 'Direction'); % +
 
 for i = 1:N
-    wave_info(i).datetime = datetime( ...
+    regular_data(i).datetime = datetime( ...
         dat(i,c_dat.year), ...
         dat(i,c_dat.month), ...
         dat(i,c_dat.day), ...
@@ -414,33 +422,31 @@ for i = 1:N
         dat(i,c_dat.minute), ...
         dat(i,c_dat.second));
 
-    wave_info(i).burst_counter       = dat(i,c_dat.burst_counter);
-    wave_info(i).n_wave_records      = dat(i,c_dat.n_wave_records);
-    wave_info(i).cell_position_m     = dat(i,c_dat.cell_position);
-    wave_info(i).battery_voltage_V   = dat(i,c_dat.battery_voltage);
-    wave_info(i).sound_speed_ms      = dat(i,c_dat.sound_speed);
-    wave_info(i).heading_deg         = dat(i,c_dat.heading);
-    wave_info(i).pitch_deg           = dat(i,c_dat.pitch);
-    wave_info(i).roll_deg            = dat(i,c_dat.roll);
-    wave_info(i).min_pressure_dbar   = dat(i,c_dat.min_pressure);
-    wave_info(i).max_pressure_dbar   = dat(i,c_dat.max_pressure);
-    wave_info(i).temperature_degC    = dat(i,c_dat.temperature);
-    wave_info(i).cell_size_m         = dat(i,c_dat.cell_size);
+    regular_data(i).error_code     = dat(i,c_dat.error_code); % +
+    regular_data(i).status_code     = dat(i,c_dat.status_code); % +
+    regular_data(i).beam_velocity_ms = [dat(i,c_dat.vel1), dat(i,c_dat.vel2), dat(i,c_dat.vel3)];
+    regular_data(i).amplitude = [dat(i,c_dat.amp1), dat(i,c_dat.amp2), dat(i,c_dat.amp3)];
 
-    wave_info(i).noise_amp_beams = [ ...
-        dat(i,c_dat.noise_amp_b1), ...
-        dat(i,c_dat.noise_amp_b2), ...
-        dat(i,c_dat.noise_amp_b3), ...
-        dat(i,c_dat.noise_amp_b4)];
+    regular_data(i).battery_voltage_V   = dat(i,c_dat.battery_voltage);
+    regular_data(i).sound_speed_ms      = dat(i,c_dat.sound_speed);
+    regular_data(i).heading_deg         = dat(i,c_dat.heading);
+    regular_data(i).pitch_deg           = dat(i,c_dat.pitch);
+    regular_data(i).roll_deg            = dat(i,c_dat.roll);
 
-    wave_info(i).ast_window_start_m  = dat(i,c_dat.ast_start);
-    wave_info(i).ast_window_size_m   = dat(i,c_dat.ast_size);
-    wave_info(i).ast_window_offset_m = dat(i,c_dat.ast_offset);
+    regular_data(i).pressure     = dat(i,c_dat.pressure); % +
+    
+    regular_data(i).temperature_degC    = dat(i,c_dat.temperature);
+
+    regular_data(i).analog_input = [dat(i,c_dat.analog1), dat(i,c_dat.analog2)];
+
+    regular_data(i).speed     = dat(i,c_dat.speed); % +
+
+    regular_data(i).direction     = dat(i,c_dat.direction); % +
 
 end
 
-data.dat = wave_info;
-nBursts_dat = length(data.dat);
+data.dat = regular_data;
+nBursts_dat = numel(data.dat);
 
 fprintf('\nInformación de archivo .dat extraida correctamente.\n')
 
@@ -476,7 +482,7 @@ fprintf('\nInformación de archivo .dat extraida correctamente.\n')
 %     fprintf('Verificación OK: todos los bursts tienen el número esperado de muestras.\n')
 % end
 
-%%%%% Continuar aqui
+
 
 %% Leer el archivo .dia
 
@@ -495,24 +501,32 @@ if ncols_dia_actual ~= ncols_dia_expected
 end
 
 % Índices de columnas .dia según el .hdr
-c_dia.month         = wsa_find_column(dia_format, 'Month');
-c_dia.day           = wsa_find_column(dia_format, 'Day');
-c_dia.year          = wsa_find_column(dia_format, 'Year');
-c_dia.hour          = wsa_find_column(dia_format, 'Hour');
-c_dia.minute        = wsa_find_column(dia_format, 'Minute');
-c_dia.second        = wsa_find_column(dia_format, 'Second');
-c_dia.burst_counter = wsa_find_column(dia_format, 'Burst counter');
-c_dia.pressure      = wsa_find_column(dia_format, 'Pressure');
-c_dia.ast_distance1 = wsa_find_column(dia_format, 'AST Distance1');
-c_dia.ast_distance2 = wsa_find_column(dia_format, 'AST Distance2');
-c_dia.ast_quality   = wsa_find_column(dia_format, 'AST Quality');
-c_dia.analog_input  = wsa_find_column(dia_format, 'Analog input');
-c_dia.vel1          = wsa_find_column(dia_format, 'Velocity (Beam1');
-c_dia.vel2          = wsa_find_column(dia_format, 'Velocity (Beam2');
-c_dia.vel3          = wsa_find_column(dia_format, 'Velocity (Beam3');
-c_dia.amp1          = wsa_find_column(dia_format, 'Amplitude (Beam1');
-c_dia.amp2          = wsa_find_column(dia_format, 'Amplitude (Beam2');
-c_dia.amp3          = wsa_find_column(dia_format, 'Amplitude (Beam3');
+c_dia.month            = wsa_find_column(dia_format, 'Month');
+c_dia.day              = wsa_find_column(dia_format, 'Day');
+c_dia.year             = wsa_find_column(dia_format, 'Year');
+c_dia.hour             = wsa_find_column(dia_format, 'Hour');
+c_dia.minute           = wsa_find_column(dia_format, 'Minute');
+c_dia.second           = wsa_find_column(dia_format, 'Second');
+c_dia.burst_counter    = wsa_find_column(dia_format, 'Burst counter');
+c_dia.error_code       = wsa_find_column(dia_format, 'Error code'); % +
+c_dia.status_code    = wsa_find_column(dia_format, 'Status code'); % +
+c_dia.vel1    = wsa_find_column(dia_format, 'Velocity (Beam1'); % +
+c_dia.vel2    = wsa_find_column(dia_format, 'Velocity (Beam2'); % +
+c_dia.vel3    = wsa_find_column(dia_format, 'Velocity (Beam3'); % +
+c_dia.amp1    = wsa_find_column(dia_format, 'Amplitude (Beam1'); % +
+c_dia.amp2    = wsa_find_column(dia_format, 'Amplitude (Beam2'); % +
+c_dia.amp3    = wsa_find_column(dia_format, 'Amplitude (Beam3'); % +
+c_dia.battery_voltage  = wsa_find_column(dia_format, 'Battery voltage');
+c_dia.sound_speed      = wsa_find_column(dia_format, 'Soundspeed');
+c_dia.heading          = wsa_find_column(dia_format, 'Heading');
+c_dia.pitch            = wsa_find_column(dia_format, 'Pitch');
+c_dia.roll             = wsa_find_column(dia_format, 'Roll');
+c_dia.pressure         = wsa_find_column(dia_format, 'Pressure'); % +
+c_dia.temperature      = wsa_find_column(dia_format, 'Temperature');
+c_dia.analog1      = wsa_find_column(dia_format, 'Analog input 1'); % +
+c_dia.analog2      = wsa_find_column(dia_format, 'Analog input 2'); % +
+c_dia.speed      = wsa_find_column(dia_format, 'Speed'); % +
+c_dia.direction      = wsa_find_column(dia_format, 'Direction'); % +
 
 %Verificar si existen fechas o burst counter
 has_time = ~isempty(c_dia.month)  && ~isempty(c_dia.day)   && ...
@@ -536,13 +550,39 @@ if has_time
     % Identificar inicios y finales de cada burst basado en tiempo
     dt = seconds(diff(time));
     threshold = 5;   % segundos, ajustable si necesario
-
     burst_breaks = find(dt > threshold);
-
     burst_start = [1; burst_breaks + 1];
     burst_end   = [burst_breaks; length(time)];
-
     segmentation_method = "time";
+
+
+
+    dt = seconds(diff(time));
+    
+    % Intervalo dominante entre muestras dentro de una ráfaga.
+    positive_dt = dt(dt > 0);
+    
+    if isempty(positive_dt)
+        error('No fue posible determinar el intervalo de muestreo del archivo .dia.');
+    end
+    
+    sample_interval_s = median(positive_dt, 'omitnan');
+    
+    if ~isfinite(sample_interval_s) || sample_interval_s <= 0
+        error('El intervalo de muestreo estimado para .dia no es válido.');
+    end
+    
+    % Un salto varias veces mayor que el intervalo normal indica
+    % el comienzo de una nueva ráfaga.
+    gap_threshold_s = max(5 * sample_interval_s, sample_interval_s + 1);
+    
+    % dt < 0 también identifica reinicios o desorden temporal.
+    burst_breaks = find(dt > gap_threshold_s | dt < 0);
+    
+    burst_start = [1; burst_breaks + 1];
+    burst_end   = [burst_breaks; numel(time)];
+    
+    segmentation_method = "time_gap";
 
 elseif has_burst_counter
     
@@ -585,24 +625,28 @@ for b = 1:nBursts_dia_detected
         wave_data(b).burst_counter = [];
     end
 
+    wave_data(b).error_code = dia(idx,c_dia.error_code);
+    wave_data(b).status_code = dia(idx,c_dia.status_code);
+
     wave_data(b).pressure_dbar = dia(idx,c_dia.pressure);
 
-    wave_data(b).ast_distance_m = [ ...
-        dia(idx,c_dia.ast_distance1), ...
-        dia(idx,c_dia.ast_distance2)];
+    %wave_data(b).ast_distance_m = [dia(idx,c_dia.ast_distance1), dia(idx,c_dia.ast_distance2)];
+    %wave_data(b).ast_quality  = dia(idx,c_dia.ast_quality);
+    %wave_data(b).analog_input = dia(idx,c_dia.analog_input);
 
-    wave_data(b).ast_quality  = dia(idx,c_dia.ast_quality);
-    wave_data(b).analog_input = dia(idx,c_dia.analog_input);
-
-    wave_data(b).beam_velocity_ms = [ ...
-        dia(idx,c_dia.vel1), ...
-        dia(idx,c_dia.vel2), ...
-        dia(idx,c_dia.vel3)];
-
-    wave_data(b).amplitude = [ ...
-        dia(idx,c_dia.amp1), ...
-        dia(idx,c_dia.amp2), ...
-        dia(idx,c_dia.amp3)];
+    wave_data(b).beam_velocity_ms = [dia(idx,c_dia.vel1), dia(idx,c_dia.vel2), dia(idx,c_dia.vel3)];
+    wave_data(b).amplitude = [dia(idx,c_dia.amp1), dia(idx,c_dia.amp2), dia(idx,c_dia.amp3)];
+    
+    wave_data(b).battery_voltage_V = dia(idx,c_dia.battery_voltage);
+    wave_data(b).sound_speed_ms = dia(idx,c_dia.sound_speed);
+    wave_data(b).heading_deg = dia(idx,c_dia.heading);
+    wave_data(b).pitch_deg = dia(idx,c_dia.pitch);
+    wave_data(b).roll_deg = dia(idx,c_dia.roll);
+    wave_data(b).temperature_C = dia(idx,c_dia.temperature);
+    wave_data(b).analog1 = dia(idx,c_dia.analog1);
+    wave_data(b).analog2 = dia(idx,c_dia.analog2);
+    wave_data(b).speed_ms = dia(idx,c_dia.speed);
+    wave_data(b).direction_deg = dia(idx,c_dia.direction);
 
     wave_data(b).nSamples = length(idx);
 
@@ -625,119 +669,121 @@ data.hdr.file_paths.dia = file_dia;
 %   -Número de muestras de cada burst en .dia debe coincidir con el número
 %    de muestras por burst indicados en .dat.
 
-fprintf('\n-------------------------------           Verificación del tamaño de los datos          -------------------------------\n');
+% Verificación en espera de revisión, se debe adecuar.
 
-% Verificación de cantidad de bursts.
-fprintf('\nVerificando consistencia en cantidad de bursts...\n')
-nBursts_dia = length(data.dia);
-burst_mismatch = false;
-if nBursts_dat ~= nBursts_dia
-    warning('\tNúmero de bursts distinto entre .dat (%d) y .dia (%d).\n', ...
-        nBursts_dat, nBursts_dia);
-    burst_mismatch = true;
-end
-if ~burst_mismatch
-    fprintf('\tVerificación de bursts OK: la cantidad de bursts entre .dat y .dia coincide.\n');
-end
-
-for b = 1:nBursts_dat
-    data.quality.flags(b).samples_flag = samples_flag(b);
-end
-
-
-% Verificación de número de muestras por burst.
-fprintf('\nVerificando consistencia en cantidad de muestras por burst...\n')
-minBursts = min(nBursts_dat, nBursts_dia);
-size_flag = false(nBursts_dat,1);
-mismatch = false;
-for b = 1:minBursts
-    expected = data.dat(b).n_wave_records;
-    actual   = data.dia(b).nSamples;
-    if expected ~= actual
-        fprintf('\tBurst %d: esperado %d muestras, encontrado %d.\n', ...
-            b, expected, actual);
-        size_flag(b) = true;
-        mismatch = true;
-    end
-end
-if nBursts_dat > nBursts_dia
-    size_flag((minBursts + 1):nBursts_dat) = true;
-    mismatch = true;
-    fprintf(['\tFaltan %d bursts en .dia para completar lo reportado en .dat. ' ...
-             'Los bursts %d a %d se marcaron con size_flag.\n'], ...
-             nBursts_dat - nBursts_dia, minBursts + 1, nBursts_dat);
-end
-if ~mismatch
-    fprintf('\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .dia coincide con la esperada en .dat.\n');
-end
-for b = 1:nBursts_dat
-    data.quality.flags(b).size_flag = size_flag(b);
-end
-%Graficar si se indica
-if do_plot
-    % Extraer bursts con tamaño incorrecto
-    bad_size_idx = find(size_flag(1:minBursts));
-    bad_size_burst_vec = zeros(numel(bad_size_idx),1);
-    bad_size_burst_value = zeros(numel(bad_size_idx),1);
-    for k = 1:numel(bad_size_idx)
-        b = bad_size_idx(k);
-        bad_size_burst_vec(k) = data.dat(b).burst_counter;
-        bad_size_burst_value(k) = data.dia(b).nSamples;
-    end
-    burst_counter_vec   = zeros(size(data.dat));
-    expected_vec        = zeros(size(data.dat));
-    actual_vec          = zeros(size(data.dat));
-    for i = 1:minBursts
-        burst_counter_vec(i) = data.dat(i).burst_counter;
-        expected_vec(i) = data.dat(i).n_wave_records;
-        actual_vec(i) = data.dia(i).nSamples;
-    end
-
-    f = figure('Name','Verificación de cantidad de muestras','Color','w');
-    f.Position = [1, 1, 1900, 1000];
-    t = title('Verificación de número de muestras por burst');
-    t.FontSize = 16;
-    hold on
-    xl = xlabel('Burst'); 
-    xl.FontSize = 14;
-    yl = ylabel('Número de muestras');
-    yl.FontSize = 14;
-    ylim([0, max(expected_vec)+200])
-    plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.dat)', 'LineWidth', 2)
-    plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.dia)', 'LineWidth', 2)
-    scatter(bad_size_burst_vec, bad_size_burst_value, 10, 'filled', 'r', 'DisplayName', 'Burst marcado')
-    hold off
-    l = legend;
-    l.FontSize = 12;
-    l.Location = "best";
-    grid on
-
-    if ~isempty(save_plot_dir)
-        saveas(gca, fullfile(save_plot_dir, 'verificacion_cantidad_muestras'), 'png')
-    end
-end
-
-% Verificación temporal
-if has_time
-    fprintf('\nVerificando existencia de desplazamientos temporales en bursts...\n')
-    time_mismatch = false;
-    for b = 1:minBursts
-        t_dat = data.dat(b).datetime;
-        t_dia = data.dia(b).datetime(1);
-        dt_seconds = abs(seconds(t_dia - t_dat));
-        if dt_seconds > 1   % tolerancia de 1 segundo
-            warning(['\tBurst %d: diferencia temporal entre .dat y .dia = %.2f s ' ...
-                     '(dat: %s | dia: %s)\n'], ...
-                     b, dt_seconds, string(t_dat), string(t_dia));
-            time_mismatch = true;
-        end
-    end
-    if ~time_mismatch
-        fprintf('\tVerificación temporal OK: todos los bursts están alineados.\n');
-    end
-else
-    fprintf('\nVerificación temporal omitida: el archivo .dia no contiene tiempo.\n')
-end
+% fprintf('\n-------------------------------           Verificación del tamaño de los datos          -------------------------------\n');
+% 
+% % Verificación de cantidad de bursts.
+% fprintf('\nVerificando consistencia en cantidad de bursts...\n')
+% nBursts_dia = length(data.dia);
+% burst_mismatch = false;
+% if nBursts_dat ~= nBursts_dia
+%     warning('\tNúmero de bursts distinto entre .dat (%d) y .dia (%d).\n', ...
+%         nBursts_dat, nBursts_dia);
+%     burst_mismatch = true;
+% end
+% if ~burst_mismatch
+%     fprintf('\tVerificación de bursts OK: la cantidad de bursts entre .dat y .dia coincide.\n');
+% end
+% 
+% % for b = 1:nBursts_dat
+% %     data.quality.flags(b).samples_flag = samples_flag(b);
+% % end
+% 
+% 
+% % Verificación de número de muestras por burst.
+% fprintf('\nVerificando consistencia en cantidad de muestras por burst...\n')
+% minBursts = min(nBursts_dat, nBursts_dia);
+% size_flag = false(nBursts_dat,1);
+% mismatch = false;
+% for b = 1:minBursts
+%     expected = data.dat(b).n_wave_records;
+%     actual   = data.dia(b).nSamples;
+%     if expected ~= actual
+%         fprintf('\tBurst %d: esperado %d muestras, encontrado %d.\n', ...
+%             b, expected, actual);
+%         size_flag(b) = true;
+%         mismatch = true;
+%     end
+% end
+% if nBursts_dat > nBursts_dia
+%     size_flag((minBursts + 1):nBursts_dat) = true;
+%     mismatch = true;
+%     fprintf(['\tFaltan %d bursts en .dia para completar lo reportado en .dat. ' ...
+%              'Los bursts %d a %d se marcaron con size_flag.\n'], ...
+%              nBursts_dat - nBursts_dia, minBursts + 1, nBursts_dat);
+% end
+% if ~mismatch
+%     fprintf('\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .dia coincide con la esperada en .dat.\n');
+% end
+% for b = 1:nBursts_dat
+%     data.quality.flags(b).size_flag = size_flag(b);
+% end
+% %Graficar si se indica
+% if do_plot
+%     % Extraer bursts con tamaño incorrecto
+%     bad_size_idx = find(size_flag(1:minBursts));
+%     bad_size_burst_vec = zeros(numel(bad_size_idx),1);
+%     bad_size_burst_value = zeros(numel(bad_size_idx),1);
+%     for k = 1:numel(bad_size_idx)
+%         b = bad_size_idx(k);
+%         bad_size_burst_vec(k) = data.dat(b).burst_counter;
+%         bad_size_burst_value(k) = data.dia(b).nSamples;
+%     end
+%     burst_counter_vec   = zeros(size(data.dat));
+%     expected_vec        = zeros(size(data.dat));
+%     actual_vec          = zeros(size(data.dat));
+%     for i = 1:minBursts
+%         burst_counter_vec(i) = data.dat(i).burst_counter;
+%         expected_vec(i) = data.dat(i).n_wave_records;
+%         actual_vec(i) = data.dia(i).nSamples;
+%     end
+% 
+%     f = figure('Name','Verificación de cantidad de muestras','Color','w');
+%     f.Position = [1, 1, 1900, 1000];
+%     t = title('Verificación de número de muestras por burst');
+%     t.FontSize = 16;
+%     hold on
+%     xl = xlabel('Burst'); 
+%     xl.FontSize = 14;
+%     yl = ylabel('Número de muestras');
+%     yl.FontSize = 14;
+%     ylim([0, max(expected_vec)+200])
+%     plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.dat)', 'LineWidth', 2)
+%     plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.dia)', 'LineWidth', 2)
+%     scatter(bad_size_burst_vec, bad_size_burst_value, 10, 'filled', 'r', 'DisplayName', 'Burst marcado')
+%     hold off
+%     l = legend;
+%     l.FontSize = 12;
+%     l.Location = "best";
+%     grid on
+% 
+%     if ~isempty(save_plot_dir)
+%         saveas(gca, fullfile(save_plot_dir, 'verificacion_cantidad_muestras'), 'png')
+%     end
+% end
+% 
+% % Verificación temporal
+% if has_time
+%     fprintf('\nVerificando existencia de desplazamientos temporales en bursts...\n')
+%     time_mismatch = false;
+%     for b = 1:minBursts
+%         t_dat = data.dat(b).datetime;
+%         t_dia = data.dia(b).datetime(1);
+%         dt_seconds = abs(seconds(t_dia - t_dat));
+%         if dt_seconds > 1   % tolerancia de 1 segundo
+%             warning(['\tBurst %d: diferencia temporal entre .dat y .dia = %.2f s ' ...
+%                      '(dat: %s | dia: %s)\n'], ...
+%                      b, dt_seconds, string(t_dat), string(t_dia));
+%             time_mismatch = true;
+%         end
+%     end
+%     if ~time_mismatch
+%         fprintf('\tVerificación temporal OK: todos los bursts están alineados.\n');
+%     end
+% else
+%     fprintf('\nVerificación temporal omitida: el archivo .dia no contiene tiempo.\n')
+% end
 
 
 
