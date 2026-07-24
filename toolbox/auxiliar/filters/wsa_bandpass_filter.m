@@ -76,7 +76,7 @@ function [xf, response] = wsa_bandpass_filter(x, fs , f_i, f_f, options)
 %% Manejo de entardas
 
 arguments
-    x {mustBeNumeric, mustBeVector}
+    x {mustBeNumeric}
     fs  (1,1) double {mustBeFinite, mustBePositive}
     f_i (1,1) double {mustBeFinite, mustBeNonnegative}
     f_f (1,1) double {mustBeFinite, mustBePositive}
@@ -109,8 +109,13 @@ end
 
 input_is_row_flag = isrow(x);
 
-x = double(x(:));
-N = numel(x);
+x = double(x);
+
+if input_is_row_flag
+    x = x.';
+end
+
+N = size(x, 1);
 
 if N < 5
     error('La señal debe contener al menos cinco muestras.');
@@ -224,30 +229,39 @@ else
     h = h/center_gain;
 end
 
+%% Aplicar el filtro a cada señal de entrada
 
-%% Extender la señal mediante reflexión
+nSignals = size(x, 2);
+xf = zeros(size(x), 'like', x);
 
-if half_length > 0
-    left_padding = flipud(x(2:half_length + 1));
-    right_padding = flipud(x(end - half_length:end - 1));
+for k = 1:nSignals
+    xk = x(:, k);
 
-    x_padded = [left_padding; x; right_padding];
+    %% Extender la señal mediante reflexión
+    
+    if half_length > 0
+        left_padding = flipud(xk(2:half_length + 1));
+        right_padding = flipud(xk(end - half_length:end - 1));
+    
+        xk_padded = [left_padding; xk; right_padding];
+    
+    else
+        xk_padded = xk;
+    end
+    
+    %% Aplicar el filtro
+    
+    % Al emplear una respuesta impulsional simétrica y una convolución
+    % centrada no se introduce un desplazamiento temporal neto.
+    xf_filtered = conv(xk_padded, h, 'same');
+    
+    % Recuperar el tramo correspondiente a la señal original.
+    first_index = half_length + 1;
+    last_index  = half_length + N;
+    
+    xf(:, k) = xf_filtered(first_index:last_index);
 
-else
-    x_padded = x;
 end
-
-%% Aplicar el filtro
-
-% Al emplear una respuesta impulsional simétrica y una convolución
-% centrada no se introduce un desplazamiento temporal neto.
-xf_padded = conv(x_padded, h, 'same');
-
-% Recuperar el tramo correspondiente a la señal original.
-first_index = half_length + 1;
-last_index  = half_length + N;
-
-xf = xf_padded(first_index:last_index);
 
 %% Recuperar la orientación original
 
