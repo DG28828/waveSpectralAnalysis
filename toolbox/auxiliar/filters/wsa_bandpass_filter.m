@@ -1,4 +1,77 @@
-function xf = wsa_bandpass_filter(x, fs , f_i, f_f)
+function [xf, response] = wsa_bandpass_filter(x, fs , f_i, f_f, options)
+%wsa_bandpass_filter - filtro FIR pasa-banda.
+%
+%   Esta función filtra una señal mediante un filtro FIR de fase lineal,
+%   construido a partir de la respuesta impulsional ideal tipo sinc y una
+%   ventana Hann simétrica.
+%
+%   El filtro pasa-banda se obtiene como la diferencia entre dos filtros
+%   pasa-bajos ideales, con frecuencias de corte f_f y f_i,
+%   respectivamente. Cuando f_i = 0, la función aplica únicamente un
+%   filtro pasa-bajos.
+%
+%   La longitud del filtro se estima automáticamente a partir del ancho
+%   de la banda de paso, la frecuencia de muestreo y la longitud de la
+%   señal.
+%
+%   Para reducir los efectos de borde, la señal se extiende mediante
+%   reflexión antes de realizar la convolución. La respuesta impulsional
+%   se aplica de forma centrada.
+%
+%
+%   Sintaxis:
+%       xf = wsa_bandpass_filter(x, fs, f_i, f_f)
+%
+%
+%   Argumentos de entrada (requeridos):
+%       x       - Señal de entrada.
+%                   Vector numérico fila o columna.
+%                   No debe contener valores NaN o Inf.
+%
+%       fs      - Frecuencia de muestreo.
+%                   Escalar positivo (Hz).
+%
+%       f_i     - Frecuencia de corte inferior.
+%                   Escalar no negativo (Hz).
+%                   Si f_i = 0, se aplica un filtro pasa-bajos.
+%
+%       f_f     - Frecuencia de corte superior.
+%                   Escalar positivo (Hz).
+%
+%                   Debe cumplirse:
+%
+%                       0 <= f_i < f_f < fs/2
+%
+%
+%   Argumentos de salida:
+%       xf      - Señal filtrada.
+%                   Vector.
+%
+%
+%   Notas:
+%   • La respuesta impulsional ideal de un filtro pasa-bajos se calcula
+%     mediante:
+%
+%         h_fc[n] = (2·fc/fs) sinc(2·fc·n/fs)
+%
+%     donde sinc corresponde a la función sinc normalizada de MATLAB:
+%
+%         sinc(z) = sin(pi·z)/(pi·z)
+%
+%   • La respuesta ideal del filtro pasa-banda se obtiene mediante:
+%
+%         h[n] = h_f_f[n] - h_f_i[n]
+%
+%   • La extensión por reflexión reduce los transitorios generados en los
+%     extremos de la señal al aplicar la convolución.
+%
+% -------------------------------------------------------------------------
+% Universidad de Costa Rica
+% Escuela de Ingeniería Civil
+% Autor: Danny Garro Arias
+% Fecha de creación: 23/07/2026
+% Fecha de modificación: 23/07/2026
+% -------------------------------------------------------------------------
 
 %% Manejo de entardas
 
@@ -7,6 +80,8 @@ arguments
     fs  (1,1) double {mustBeFinite, mustBePositive}
     f_i (1,1) double {mustBeFinite, mustBeNonnegative}
     f_f (1,1) double {mustBeFinite, mustBePositive}
+
+    options.FrequencyResponse (1,1) logical = false
 end
 
 %% Verificaciones iniciales
@@ -37,9 +112,9 @@ input_is_row_flag = isrow(x);
 x = double(x(:));
 N = numel(x);
 
-% if N < 5
-%     error('La señal debe contener al menos cinco muestras.');
-% end
+if N < 5
+    error('La señal debe contener al menos cinco muestras.');
+end
 
 %% Determinar la longitud del filtro
 
@@ -52,11 +127,11 @@ df = fs/N;
 transition_width = 0.10*bandwidth;
 
 % Evitar que la transición superior exceda Nyquist.
-transition_width = min(transition_width, f_nyquist - f_f);
+transition_width = min(transition_width, 2*(f_nyquist - f_f));
 
 % Limitar también la transición inferior.
 if f_i > 0
-    transition_width = min(transition_width, f_i/2);
+    transition_width = min(transition_width, 2*f_i);
 end
 
 % No se puede diseñar una transición mucho menor que la resolución
@@ -178,6 +253,46 @@ xf = xf_padded(first_index:last_index);
 
 if input_is_row_flag
     xf = xf.';
+end
+
+%% Obtener la respuesta en frecuencia del filtro
+
+response = struct();
+
+if options.FrequencyResponse
+
+    % Número de puntos para evaluar la respuesta en frecuencia.
+    n_frequency_points = 4096;
+
+    % freqz interpreta los coeficientes como un FIR causal, por lo que
+    % incluye el retardo lineal de half_length muestras.
+    [H_causal, f_response] = freqz(h, 1, n_frequency_points, fs);
+
+    % Compensar el retardo lineal para representar el filtro tal como se
+    % aplica mediante la convolución centrada de esta función.
+    H_centered = H_causal.*exp(1i*2*pi*f_response*half_length/fs);
+
+    magnitude = abs(H_centered);
+
+    response.f = f_response;
+    response.H = H_centered;
+    response.H_causal = H_causal;
+    response.magnitude = magnitude;
+    response.magnitude_dB = 20*log10(max(magnitude, eps));
+    response.phase_rad = unwrap(angle(H_centered));
+    response.phase_deg = rad2deg(response.phase_rad);
+
+    response.h = h;
+    response.filter_order = filter_length - 1;
+    response.filter_length = filter_length;
+    response.transition_width = transition_width;
+    response.group_delay_samples = half_length;
+
+    response.fs = fs;
+    response.f_i = f_i;
+    response.f_f = f_f;
+    response.window = "hann";
+
 end
 
 
