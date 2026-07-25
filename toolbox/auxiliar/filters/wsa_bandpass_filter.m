@@ -101,9 +101,18 @@ end
 
 f_nyquist = fs/2;
 
-if f_f >= f_nyquist
-    error('La frecuencia de corte superior f_f debe ser menor que la frecuencia de Nyquist fs/2 = %.6g Hz.', f_nyquist);
+frequency_tolerance = 10*eps(max(fs, f_f));
+
+if f_f > f_nyquist + frequency_tolerance
+    error('La frecuencia de corte superior f_f no puede superar la frecuencia de Nyquist fs/2 = %.6g Hz.', f_nyquist);
 end
+
+% Corregir pequeñas diferencias debidas al redondeo numérico.
+if abs(f_f - f_nyquist) <= frequency_tolerance
+    f_f = f_nyquist;
+end
+
+upper_cutoff_at_nyquist = f_f == f_nyquist;
 
 %% Preparación de la señal
 
@@ -131,8 +140,10 @@ df = fs/N;
 % Transición equivalente al 10 % del ancho de la banda de paso.
 transition_width = 0.10*bandwidth;
 
-% Evitar que la transición superior exceda Nyquist.
-transition_width = min(transition_width, 2*(f_nyquist - f_f));
+% Solo limitar la transición superior cuando existe una banda de rechazo entre f_f y Nyquist.
+if ~upper_cutoff_at_nyquist
+    transition_width = min(transition_width, 2*(f_nyquist - f_f));
+end
 
 % Limitar también la transición inferior.
 if f_i > 0
