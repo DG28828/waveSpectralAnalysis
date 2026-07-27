@@ -166,6 +166,9 @@ addParameter(p, 'z_v', z_default)
 addParameter(p, 'g', g_default);
 addParameter(p, 'rho',    rho_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
+
+%Otros parámetros
+addParameter(p, 'FrequencyRange', [0 Inf]);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 parse(p, Z, X, Y, fs, method, varargin{:});
@@ -187,6 +190,9 @@ z_v       = p.Results.z_v;
 g    = p.Results.g;
 rho     = p.Results.rho;
 Kp_min = p.Results.Kp_min;
+
+%Resultados de otros parámetros
+frequencyRange = p.Results.FrequencyRange;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -247,6 +253,11 @@ f = out_spectrum.f;
 Spos = S(2:end);
 fpos = f(2:end);
 
+% Mantener solo las frecuencias según parámetro frequencyRange
+keep = isfinite(fpos) & fpos >= frequencyRange(1) & fpos <= frequencyRange(2);
+fpos = fpos(keep);
+Spos = Spos(keep);
+
 
 %% Coeficientes de la serie de Fourier: a1, b1, a2, b2
 
@@ -276,6 +287,18 @@ a1 = out_coeffs.a1;
 b1 = out_coeffs.b1;
 a2 = out_coeffs.a2;
 b2 = out_coeffs.b2;
+
+% Mantener solo las frecuencias según parámetro frequencyRange
+a1 = a1(keep);
+b1 = b1(keep);
+a2 = a2(keep);
+b2 = b2(keep);
+out_coeffs.W  = out_coeffs.W(keep);
+out_coeffs.f  = out_coeffs.f(keep);
+out_coeffs.a1 = a1;
+out_coeffs.b1 = b1;
+out_coeffs.a2 = a2;
+out_coeffs.b2 = b2;
 
 %% Método: Serie de Fourier Truncada (TFS)
 
