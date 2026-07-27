@@ -8,7 +8,7 @@ function data = wsa_aquadopp_read(files_dir, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 22/07/2026
-% Fecha de modificación: 23/07/2026
+% Fecha de modificación: 27/07/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -170,11 +170,11 @@ setup.Diagnostics_Number_of_samples  = wsa_getNumField(hdr_txt, 'Diagnostics - N
 setup.Diagnostics_Cell_number     = wsa_getNumField(hdr_txt, 'Diagnostics - Cell number'); % +
 setup.Diagnostics_Number_of_pings      = wsa_getNumField(hdr_txt, 'Diagnostics - Number of pings'); % +
 
-setup.Diagnostics_Sampling_interval_s = NaN;
-setup.Diagnostics_Sampling_rate_Hz    = NaN;
-setup.Diagnostics_burst_duration_s    = NaN;
-setup.Diagnostics_Nyquist_frequency_Hz = NaN;
-setup.Diagnostics_frequency_resolution_Hz = NaN;
+setup.Diagnostics_Sampling_rate_Hz = 1; % Aquadopp solo hace muestras a 1 Hz.
+setup.Diagnostics_Sampling_interval_s = 1/setup.Diagnostics_Sampling_rate_Hz;
+setup.Diagnostics_burst_duration_s = setup.Diagnostics_Number_of_samples/setup.Diagnostics_Sampling_rate_Hz;
+setup.Diagnostics_Nyquist_frequency_Hz = setup.Diagnostics_Sampling_rate_Hz/2;
+setup.Diagnostics_frequency_resolution_Hz = setup.Diagnostics_Sampling_rate_Hz/setup.Diagnostics_Number_of_samples;
 
 setup.Analog_input_1              = wsa_getStrField(hdr_txt, 'Analog input 1');     % =
 setup.External_input_2            = wsa_getStrField(hdr_txt, 'External input 2');   % +
@@ -194,8 +194,8 @@ setup.Comments                    = wsa_getTextField(hdr_txt, 'Comments');      
 setup.Start_command               = wsa_getTextField(hdr_txt, 'Start command');     % =
 setup.CRC_download                = wsa_getStrField(hdr_txt, 'CRC download');       % =
 
-%Calculado
 
+%Calculado
 if ~isnat(general.Time_of_first_measurement) && ~isnat(general.Time_of_last_measurement) && isfinite(setup.Diagnostics_Interval_s) && setup.Diagnostics_Interval_s > 0
     total_seconds = seconds( general.Time_of_last_measurement - general.Time_of_first_measurement);
     setup.Expected_number_of_diagnostic_bursts = floor(total_seconds / setup.Diagnostics_Interval_s) + 1;
@@ -203,25 +203,13 @@ else
     setup.Expected_number_of_diagnostic_bursts = NaN;
 end
 
-% Derivadas útiles
-setup.Wave_Sampling_rate_Hz = 0;
-
-if ~isnan(setup.Diagnostics_Number_of_samples) && ~isnan(setup.Wave_Sampling_rate_Hz) && setup.Wave_Sampling_rate_Hz > 0
-    setup.Wave_burst_duration_s = setup.Diagnostics_Number_of_samples / setup.Wave_Sampling_rate_Hz;
-    setup.Wave_Nyquist_frequency_Hz = setup.Wave_Sampling_rate_Hz / 2;
-    setup.Wave_frequency_resolution_Hz = setup.Wave_Sampling_rate_Hz / setup.Diagnostics_Number_of_samples;
-else
-    setup.Wave_burst_duration_s = NaN;
-    setup.Wave_Nyquist_frequency_Hz = NaN;
-    setup.Wave_frequency_resolution_Hz = NaN;
-end
 
 if ~isnat(general.Time_of_first_measurement) && ~isnat(general.Time_of_last_measurement) ...
         && ~isnan(setup.Measurement_interval_s) && setup.Measurement_interval_s > 0
     total_seconds = seconds(general.Time_of_last_measurement - general.Time_of_first_measurement);
-    setup.Expected_number_of_wave_bursts = floor(total_seconds / setup.Measurement_interval_s) + 1;
+    setup.Expected_number_of_regular_measurements = floor(total_seconds / setup.Measurement_interval_s) + 1;
 else
-    setup.Expected_number_of_wave_bursts = NaN;
+    setup.Expected_number_of_regular_measurements = NaN;
 end
 %-------------------------------------------------------------------------%
 
@@ -352,7 +340,7 @@ end
 coord_system = data.hdr.setup.Coordinate_system;
 fprintf('\nVerificando sistema de coordenadas...\n')
 if coord_system ~= "ENU" 
-    warning(['El sistema de coordenadas del AWAC es "%s". ' ...
+    warning(['El sistema de coordenadas del AQUADOPP es "%s". ' ...
              'La función asume coordenadas ENU (East-North-Up). ' ...
              'Los resultados podrían ser incorrectos.'], coord_system);
 else  
@@ -434,7 +422,7 @@ for i = 1:N
     regular_data(i).roll_deg            = dat(i,c_dat.roll);
 
     regular_data(i).pressure     = dat(i,c_dat.pressure); % +
-    
+
     regular_data(i).temperature_degC    = dat(i,c_dat.temperature);
 
     regular_data(i).analog_input = [dat(i,c_dat.analog1), dat(i,c_dat.analog2)];
@@ -446,7 +434,7 @@ for i = 1:N
 end
 
 data.dat = regular_data;
-nBursts_dat = numel(data.dat);
+nMeasurements_dat = numel(data.dat);
 
 fprintf('\nInformación de archivo .dat extraida correctamente.\n')
 
@@ -458,13 +446,13 @@ fprintf('\nInformación de archivo .dat extraida correctamente.\n')
 % 
 % wave_records = [data.dat.n_wave_records]';
 % 
-% samples_flag = false(nBursts_dat,1);
+% samples_flag = false(nMeasurements_dat,1);
 % 
 % mismatch_found = false;
 % 
 % 
 % 
-% for b = 1:nBursts_dat
+% for b = 1:nMeasurements_dat
 % 
 %     if wave_records(b) ~= expected_samples
 % 
@@ -534,6 +522,11 @@ has_time = ~isempty(c_dia.month)  && ~isempty(c_dia.day)   && ...
            ~isempty(c_dia.minute) && ~isempty(c_dia.second);
 has_burst_counter = ~isempty(c_dia.burst_counter);
 
+%=== Considerar, para después, si hacer tiempo obligatorio y no tratar de extraer burst_counter
+% if ~has_time
+%     error('El archivo .dia no contiene las seis columnas de fecha y hora necesarias para segmentar y fechar los bursts diagnósticos.');
+% end
+
 
 % Identificar inicios y finales de cada burst para segmentar archivo .dia
 if has_time
@@ -549,40 +542,11 @@ if has_time
 
     % Identificar inicios y finales de cada burst basado en tiempo
     dt = seconds(diff(time));
-    threshold = 5;   % segundos, ajustable si necesario
+    threshold = 10;   % segundos, ajustable si necesario
     burst_breaks = find(dt > threshold);
     burst_start = [1; burst_breaks + 1];
     burst_end   = [burst_breaks; length(time)];
     segmentation_method = "time";
-
-
-
-    dt = seconds(diff(time));
-    
-    % Intervalo dominante entre muestras dentro de una ráfaga.
-    positive_dt = dt(dt > 0);
-    
-    if isempty(positive_dt)
-        error('No fue posible determinar el intervalo de muestreo del archivo .dia.');
-    end
-    
-    sample_interval_s = median(positive_dt, 'omitnan');
-    
-    if ~isfinite(sample_interval_s) || sample_interval_s <= 0
-        error('El intervalo de muestreo estimado para .dia no es válido.');
-    end
-    
-    % Un salto varias veces mayor que el intervalo normal indica
-    % el comienzo de una nueva ráfaga.
-    gap_threshold_s = max(5 * sample_interval_s, sample_interval_s + 1);
-    
-    % dt < 0 también identifica reinicios o desorden temporal.
-    burst_breaks = find(dt > gap_threshold_s | dt < 0);
-    
-    burst_start = [1; burst_breaks + 1];
-    burst_end   = [burst_breaks; numel(time)];
-    
-    segmentation_method = "time_gap";
 
 elseif has_burst_counter
     
@@ -630,10 +594,6 @@ for b = 1:nBursts_dia_detected
 
     wave_data(b).pressure_dbar = dia(idx,c_dia.pressure);
 
-    %wave_data(b).ast_distance_m = [dia(idx,c_dia.ast_distance1), dia(idx,c_dia.ast_distance2)];
-    %wave_data(b).ast_quality  = dia(idx,c_dia.ast_quality);
-    %wave_data(b).analog_input = dia(idx,c_dia.analog_input);
-
     wave_data(b).beam_velocity_ms = [dia(idx,c_dia.vel1), dia(idx,c_dia.vel2), dia(idx,c_dia.vel3)];
     wave_data(b).amplitude = [dia(idx,c_dia.amp1), dia(idx,c_dia.amp2), dia(idx,c_dia.amp3)];
     
@@ -662,6 +622,70 @@ data.hdr.file_paths.hdr = file_hdr;
 data.hdr.file_paths.dat = file_dat;
 data.hdr.file_paths.dia = file_dia;
 
+%% Información por burst
+
+nBursts = numel(data.dia);
+
+nBursts_dia = numel(burst_start);
+diagnostic_info(nBursts_dia,1) = struct();
+
+for b = 1:nBursts_dia
+
+    idx = burst_start(b):burst_end(b);
+
+    heading_b = dia(idx,c_dia.heading);
+    pitch_b   = dia(idx,c_dia.pitch);
+    roll_b    = dia(idx,c_dia.roll);
+    pressure_b = dia(idx,c_dia.pressure);
+
+    % Heading medio circular.
+    mean_sin = mean(sind(heading_b), 'omitnan');
+    mean_cos = mean(cosd(heading_b), 'omitnan');
+
+    heading_mean = mod(atan2d(mean_sin, mean_cos), 360);
+
+    % Tilt para cada muestra.
+    cos_tilt_b = cosd(pitch_b).*cosd(roll_b);
+    cos_tilt_b = max(-1, min(1, cos_tilt_b));
+    tilt_b = acosd(cos_tilt_b);
+
+    diagnostic_info(b).burst_index = b;
+
+    diagnostic_info(b).datetime = time(idx(1));
+    diagnostic_info(b).end_datetime = time(idx(end));
+    diagnostic_info(b).n_diagnostic_records = numel(idx);
+    diagnostic_info(b).heading_deg = heading_mean;
+    diagnostic_info(b).pitch_deg = median(pitch_b, 'omitnan');
+    diagnostic_info(b).roll_deg = median(roll_b, 'omitnan');
+    diagnostic_info(b).tilt_deg = median(tilt_b, 'omitnan');
+    diagnostic_info(b).max_tilt_deg = max(tilt_b, [], 'omitnan');
+    diagnostic_info(b).mean_pressure_dbar = mean(pressure_b, 'omitnan');
+    diagnostic_info(b).min_pressure_dbar = min(pressure_b, [], 'omitnan');
+    diagnostic_info(b).max_pressure_dbar = max(pressure_b, [], 'omitnan');
+    diagnostic_info(b).battery_voltage_V = median(dia(idx,c_dia.battery_voltage), 'omitnan');
+    diagnostic_info(b).sound_speed_ms = median(dia(idx,c_dia.sound_speed), 'omitnan');
+    diagnostic_info(b).temperature_degC = median(dia(idx,c_dia.temperature), 'omitnan');
+end
+
+data.dia_info = diagnostic_info;
+
+burst_index = (1:nBursts)';
+
+%% Inicializar banderas de calidad de los datos
+
+empty_flags = struct( ...
+    'samples_flag', false, ...
+    'heading_jump_flag', false, ...
+    'tilt_jump_flag', false, ...
+    'orientation_flag', false, ...
+    'warning_tilt_flag_5', false, ...
+    'warning_tilt_flag_20', false, ...
+    'bad_tilt_flag', false, ...
+    'pressure_flag', false, ...
+    'pressure_sample_flag', false);
+
+data.quality.flags = repmat(empty_flags, nBursts, 1);
+
 %% Verificación de calidad de los datos #1
 %
 % Verificaciones realizadas:
@@ -671,97 +695,77 @@ data.hdr.file_paths.dia = file_dia;
 
 % Verificación en espera de revisión, se debe adecuar.
 
-% fprintf('\n-------------------------------           Verificación del tamaño de los datos          -------------------------------\n');
-% 
-% % Verificación de cantidad de bursts.
-% fprintf('\nVerificando consistencia en cantidad de bursts...\n')
-% nBursts_dia = length(data.dia);
-% burst_mismatch = false;
-% if nBursts_dat ~= nBursts_dia
-%     warning('\tNúmero de bursts distinto entre .dat (%d) y .dia (%d).\n', ...
-%         nBursts_dat, nBursts_dia);
-%     burst_mismatch = true;
-% end
-% if ~burst_mismatch
-%     fprintf('\tVerificación de bursts OK: la cantidad de bursts entre .dat y .dia coincide.\n');
-% end
-% 
-% % for b = 1:nBursts_dat
-% %     data.quality.flags(b).samples_flag = samples_flag(b);
-% % end
-% 
-% 
-% % Verificación de número de muestras por burst.
-% fprintf('\nVerificando consistencia en cantidad de muestras por burst...\n')
-% minBursts = min(nBursts_dat, nBursts_dia);
-% size_flag = false(nBursts_dat,1);
-% mismatch = false;
-% for b = 1:minBursts
-%     expected = data.dat(b).n_wave_records;
-%     actual   = data.dia(b).nSamples;
-%     if expected ~= actual
-%         fprintf('\tBurst %d: esperado %d muestras, encontrado %d.\n', ...
-%             b, expected, actual);
-%         size_flag(b) = true;
-%         mismatch = true;
-%     end
-% end
-% if nBursts_dat > nBursts_dia
-%     size_flag((minBursts + 1):nBursts_dat) = true;
-%     mismatch = true;
-%     fprintf(['\tFaltan %d bursts en .dia para completar lo reportado en .dat. ' ...
-%              'Los bursts %d a %d se marcaron con size_flag.\n'], ...
-%              nBursts_dat - nBursts_dia, minBursts + 1, nBursts_dat);
-% end
-% if ~mismatch
-%     fprintf('\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .dia coincide con la esperada en .dat.\n');
-% end
-% for b = 1:nBursts_dat
-%     data.quality.flags(b).size_flag = size_flag(b);
-% end
-% %Graficar si se indica
-% if do_plot
-%     % Extraer bursts con tamaño incorrecto
-%     bad_size_idx = find(size_flag(1:minBursts));
-%     bad_size_burst_vec = zeros(numel(bad_size_idx),1);
-%     bad_size_burst_value = zeros(numel(bad_size_idx),1);
-%     for k = 1:numel(bad_size_idx)
-%         b = bad_size_idx(k);
-%         bad_size_burst_vec(k) = data.dat(b).burst_counter;
-%         bad_size_burst_value(k) = data.dia(b).nSamples;
-%     end
-%     burst_counter_vec   = zeros(size(data.dat));
-%     expected_vec        = zeros(size(data.dat));
-%     actual_vec          = zeros(size(data.dat));
-%     for i = 1:minBursts
-%         burst_counter_vec(i) = data.dat(i).burst_counter;
-%         expected_vec(i) = data.dat(i).n_wave_records;
-%         actual_vec(i) = data.dia(i).nSamples;
-%     end
-% 
-%     f = figure('Name','Verificación de cantidad de muestras','Color','w');
-%     f.Position = [1, 1, 1900, 1000];
-%     t = title('Verificación de número de muestras por burst');
-%     t.FontSize = 16;
-%     hold on
-%     xl = xlabel('Burst'); 
-%     xl.FontSize = 14;
-%     yl = ylabel('Número de muestras');
-%     yl.FontSize = 14;
-%     ylim([0, max(expected_vec)+200])
-%     plot(burst_counter_vec, expected_vec, '-', 'DisplayName', 'Esperado (.dat)', 'LineWidth', 2)
-%     plot(burst_counter_vec, actual_vec, '-', 'DisplayName', 'Actual (.dia)', 'LineWidth', 2)
-%     scatter(bad_size_burst_vec, bad_size_burst_value, 10, 'filled', 'r', 'DisplayName', 'Burst marcado')
-%     hold off
-%     l = legend;
-%     l.FontSize = 12;
-%     l.Location = "best";
-%     grid on
-% 
-%     if ~isempty(save_plot_dir)
-%         saveas(gca, fullfile(save_plot_dir, 'verificacion_cantidad_muestras'), 'png')
-%     end
-% end
+fprintf('\n-------------------------------           Verificación del tamaño de los datos          -------------------------------\n');
+
+
+% Verificación de número de muestras por burst.
+fprintf('\nVerificando consistencia en cantidad de muestras por burst...\n')
+
+mismatch = false;
+expected_samples = data.hdr.setup.Diagnostics_Number_of_samples;
+actual_samples = [data.dia.nSamples]';
+samples_flag = actual_samples ~= expected_samples;
+
+for b = 1:nBursts
+    data.quality.flags(b).samples_flag = samples_flag(b);
+end
+
+for b = 1:nBursts
+    if expected_samples ~= actual_samples(b)
+        fprintf('\tBurst %d: esperado %d muestras, encontrado %d.\n', ...
+            b, expected_samples, actual_samples(b));
+        mismatch = true;
+    end
+end
+
+if ~mismatch
+    fprintf('\tVerificación de muestras OK: la cantidad de muestras de todos los bursts de .dia coincide con la indicada en el .hdr.\n');
+end
+
+%Graficar si se indica
+if do_plot
+
+    expected_vec = repmat(expected_samples, nBursts, 1);
+    actual_vec   = actual_samples;
+
+    bad_size_idx = find(samples_flag);
+
+    f = figure('Name', 'Verificación de cantidad de muestras', 'Color', 'w');
+
+    f.Position = [1, 1, 1900, 1000];
+
+    hold on
+
+    t = title('Verificación del número de muestras por burst');
+    xl = xlabel('Burst');
+    yl = ylabel('Número de muestras');
+
+    plot(burst_index, expected_vec, '-', 'DisplayName', 'Esperado (.hdr)', 'LineWidth', 2);
+
+    plot(burst_index, actual_vec, '-', 'DisplayName', 'Actual (.dia)', 'LineWidth', 1.5);
+
+    if ~isempty(bad_size_idx)
+        scatter(burst_index(bad_size_idx), actual_vec(bad_size_idx), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
+    end
+
+    hold off
+
+    ylim([0, max([expected_vec; actual_vec], [], 'omitnan') + 200])
+
+    l = legend('Location', 'best');
+    grid on
+    box on
+
+    t.FontSize  = 16;
+    xl.FontSize = 14;
+    yl.FontSize = 14;
+    l.FontSize  = 12;
+
+    if ~isempty(save_plot_dir)
+        exportgraphics(f, fullfile(save_plot_dir, 'verificacion_cantidad_muestras.png'), 'Resolution', 300);
+    end
+end
+
 % 
 % % Verificación temporal
 % if has_time
@@ -786,10 +790,7 @@ data.hdr.file_paths.dia = file_dia;
 % end
 
 
-
 %% Verificación de calidad de los datos #2
-%
-% Verificaciones realizadas:
 
 fprintf('\n-------------------          Verificación de orientación de los datos (Heave, Pitch y Roll)         -------------------\n');
 
@@ -800,30 +801,15 @@ fprintf('\t-Tilt máximo: %d °\n', tilt_limit)
 fprintf('\t-Cambio máximo en heading: %d °\n', heading_jump_limit)
 fprintf('\t-Cambio máximo en tilt: %d °\n\n', tilt_jump_limit)
 
-heading = [data.dat.heading_deg];
-pitch   = [data.dat.pitch_deg];
-roll    = [data.dat.roll_deg];
-
-% Inclinación total del eje Z del instrumento respecto
-% de la vertical.
-cos_tilt = cosd(pitch).*cosd(roll);
-
-% Protección frente a errores numéricos de redondeo
-cos_tilt = max(-1, min(1, cos_tilt));
-
-tilt = acosd(cos_tilt);
-
-%Guardar tilt como salida en data
-for k = 1:numel(data.dat)
-    data.dat(k).tilt_deg = tilt(k);
-end
+heading = [data.dia_info.heading_deg]';
+pitch   = [data.dia_info.pitch_deg]';
+roll    = [data.dia_info.roll_deg]';
+tilt    = [data.dia_info.tilt_deg]';
+maximum_tilt = [data.dia_info.max_tilt_deg]';
 
 % 1) Límites absolutos
-%bad_pitch_flag = abs(pitch) > pitch_limit;
-%bad_roll_flag = abs(roll) > roll_limit;
-bad_tilt_flag = tilt > tilt_limit;
-warning_tilt_flag_5 = tilt > 5;             % Si tilt es mayor a 5° guardar flag de warning, ya que AST no será confiable.
-warning_tilt_flag_10 = tilt > 10;         % Si tilt es mayor a 10° guardar flag de warning, ya que AST es inutilizable.
+bad_tilt_flag = maximum_tilt > tilt_limit;
+warning_tilt_flag_5 = tilt > 5;             % Si tilt es mayor a 5° guardar flag de warning.
 warning_tilt_flag_20 = tilt > 20;         % Si tilt es mayor a 20° guardar flag de warning, ya que todas las mediciones son inutilizables.
 
 % 2) Cambios bruscos entre bursts
@@ -857,19 +843,18 @@ dot_z = max(-1, min(1, dot_z));
 d_tilt_axis = acosd(dot_z);
 
 % Flags de jump, separados
-heading_jump_flag = [false, d_heading > heading_jump_limit];
-tilt_jump_flag = [false, d_tilt_axis > tilt_jump_limit];
+heading_jump_flag = [false; d_heading > heading_jump_limit];
+tilt_jump_flag = [false; d_tilt_axis > tilt_jump_limit];
 
 % Flag general de orientación
-orientation_flag = (bad_tilt_flag | heading_jump_flag | tilt_jump_flag)';
+orientation_flag = bad_tilt_flag | heading_jump_flag | tilt_jump_flag;
 
 % Guardar flags
-for b = 1:nBursts_dat
+for b = 1:nBursts
     data.quality.flags(b).heading_jump_flag = heading_jump_flag(b);
     data.quality.flags(b).tilt_jump_flag = tilt_jump_flag(b);
     data.quality.flags(b).orientation_flag = orientation_flag(b);
     data.quality.flags(b).warning_tilt_flag_5 = warning_tilt_flag_5(b);
-    data.quality.flags(b).warning_tilt_flag_10 = warning_tilt_flag_10(b);
     data.quality.flags(b).warning_tilt_flag_20 = warning_tilt_flag_20(b);
     data.quality.flags(b).bad_tilt_flag = bad_tilt_flag(b);
     if orientation_flag(b)
@@ -879,10 +864,8 @@ for b = 1:nBursts_dat
     if warning_tilt_flag_5(b)
         if warning_tilt_flag_20(b)
             fprintf('Burst %d presenta un tilt mayor a 20°, todas las mediciones podrían ser inutilizables.\n', b)
-        elseif warning_tilt_flag_10(b)
-            fprintf('Burst %d presenta un tilt mayor a 10°, las mediciones AST podrían ser inutilizables.\n', b)
         else
-            fprintf('Burst %d presenta un tilt mayor a 5°, las mediciones AST podrían no ser confiables.\n', b)
+            fprintf('Burst %d presenta un tilt mayor a 5°, mediciones podrían estar afectadas.\n', b)
         end
     end
 end
@@ -891,104 +874,88 @@ fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
     sum(orientation_flag));
 
 if do_plot
-    burst_counter_vec = [data.dat.burst_counter];
 
-    % Recalcular diferencias para graficar
-    d_heading = abs(diff(heading));
-    d_heading = min(d_heading, 360 - d_heading); % corregir wrapping
-    d_pitch   = abs(diff(pitch));
-    d_roll    = abs(diff(roll));
+    % Cambios alineados con la ráfaga posterior.
+    d_heading_plot      = [NaN; d_heading];
+    d_tilt_axis_plot    = [NaN; d_tilt_axis];
 
-    % Para alinear con bursts
-    d_heading_plot = [NaN, d_heading];
-    d_pitch_plot   = [NaN, d_pitch];
-    d_roll_plot    = [NaN, d_roll];
-    d_tilt_magnitude_plot = [NaN, d_tilt_magnitude];
-    d_tilt_axis_plot      = [NaN, d_tilt_axis];
+    f = figure('Name', 'Verificación de orientación', 'Color', 'w');
 
-    f = figure('Name','Verificación de orientación','Color','w');
     f.Position = [1, 1, 1900, 1000];
 
-    % --- Subgráfico 1: valores absolutos ---
-    subplot(2,1,1)
+    tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    %% Valores absolutos
+
+    nexttile
     hold on
-    t = title('Verificación de orientación: valores absolutos');
-    xl = xlabel('Burst');
-    yl = ylabel('Ángulo (°)');
 
-    plot(burst_counter_vec, heading, '-', 'DisplayName', 'Heading')
-    % plot(burst_counter_vec, pitch, '-', 'DisplayName', 'Pitch')
-    % plot(burst_counter_vec, roll, '-', 'DisplayName', 'Roll')
-    plot(burst_counter_vec, tilt, '-', 'DisplayName', 'Tilt')
+    t1 = title('Verificación de orientación: valores absolutos');
+    xl1 = xlabel('Burst');
+    yl1 = ylabel('Ángulo (°)');
 
-    %yline(pitch_limit, '--', 'DisplayName', 'Límite pitch')
-    %yline(-pitch_limit, '--', 'HandleVisibility','off')
-    %yline(roll_limit, ':', 'DisplayName', 'Límite roll')
-    %yline(-roll_limit, ':', 'HandleVisibility','off')
-    yline(10, ':', 'DisplayName', 'Límite Tilt para AST')
-    yline(tilt_limit, '--', 'DisplayName', 'Límite Tilt')
-    %yline(-tilt_limit, '--', 'HandleVisibility','off')
+    plot(burst_index, heading, '-', 'DisplayName', 'Heading');
 
-    % Bursts malos
-    % scatter(burst_counter_vec(bad_pitch_flag), ...
-    %         pitch(bad_pitch_flag), 40, 'r', 'filled', ...
-    %         'DisplayName', 'Burst marcado')
-    % scatter(burst_counter_vec(bad_roll_flag), ...
-    %         roll(bad_roll_flag), 40, 'r', 'filled', ...
-    %         'HandleVisibility','off')
-    scatter(burst_counter_vec(warning_tilt_flag_10), ...
-            tilt(warning_tilt_flag_10), 40, 'o', 'filled', ...
-            'DisplayName', 'Burst marcado para AST')
-    scatter(burst_counter_vec(bad_tilt_flag), ...
-            tilt(bad_tilt_flag), 40, 'r', 'filled', ...
-            'DisplayName', 'Burst marcado')
+    plot(burst_index, tilt, '-',  'DisplayName', 'Tilt');
+
+    plot(burst_index, maximum_tilt, ':', 'DisplayName', 'Tilt máximo');
+
+    yline(5, ':', 'DisplayName', 'Advertencia de tilt');
+
+    yline(tilt_limit, '--', 'DisplayName', 'Límite máximo de tilt');
+
+    if any(bad_tilt_flag)
+        scatter(burst_index(bad_tilt_flag), maximum_tilt(bad_tilt_flag), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
+    end
 
     hold off
-    l = legend('Location','best');
+
+    l1 = legend('Location', 'best');
     grid on
-    t.FontSize = 16;
-    xl.FontSize = 14;
-    yl.FontSize = 14;
-    l.FontSize = 12;
+    box on
 
-    % --- Subgráfico 2: saltos entre bursts ---
-    subplot(2,1,2)
+    t1.FontSize  = 16;
+    xl1.FontSize = 14;
+    yl1.FontSize = 14;
+    l1.FontSize  = 12;
+
+    %% Cambios entre ráfagas
+
+    nexttile
     hold on
-    t = title('Verificación de orientación: cambios entre bursts');
-    xl = xlabel('Burst');
-    yl = ylabel('\Delta ángulo (°)');
 
-    plot(burst_counter_vec, d_heading_plot, '-', 'DisplayName', '\Delta Heading')
-    % plot(burst_counter_vec, d_pitch_plot, '-', 'DisplayName', '\Delta Pitch')
-    % plot(burst_counter_vec, d_roll_plot, '-', 'DisplayName', '\Delta Roll')
-    plot(burst_counter_vec, d_tilt_axis_plot, '-', 'DisplayName', '\Delta Tilt')
+    t2 = title('Verificación de orientación: cambios entre ráfagas');
+    xl2 = xlabel('Burst');
+    yl2 = ylabel('\Delta ángulo (°)');
 
-    yline(heading_jump_limit, '--', 'DisplayName', 'Límite salto heading')
-    yline(tilt_jump_limit, ':', 'DisplayName', 'Límite salto tilt')
+    plot(burst_index, d_heading_plot, '-', 'DisplayName', '\Delta Heading');
 
-    scatter(burst_counter_vec(heading_jump_flag), ...
-            d_heading_plot(heading_jump_flag), 40, 'r', 'filled', ...
-            'DisplayName', 'Burst marcado')
-    % scatter(burst_counter_vec(orientation_flag), ...
-    %         d_pitch_plot(orientation_flag), 40, 'r', 'filled', ...
-    %         'HandleVisibility','off')
-    % scatter(burst_counter_vec(orientation_flag), ...
-    %         d_roll_plot(orientation_flag), 40, 'r', 'filled', ...
-    %         'HandleVisibility','off')
-    scatter(burst_counter_vec(tilt_jump_flag), ...
-            d_tilt_axis_plot(tilt_jump_flag), 40, 'r', 'filled', ...
-            'HandleVisibility','off')
+    plot(burst_index, d_tilt_axis_plot, '-', 'DisplayName', '\Delta Tilt');
+
+    yline(heading_jump_limit, '--', 'DisplayName', 'Límite de salto en heading');
+    yline(tilt_jump_limit, ':', 'DisplayName', 'Límite de salto en tilt');
+
+    if any(heading_jump_flag)
+        scatter(burst_index(heading_jump_flag), d_heading_plot(heading_jump_flag), 40, 'r', 'filled', 'DisplayName', 'Salto de heading', 'HandleVisibility','off');
+    end
+
+    if any(tilt_jump_flag)
+        scatter(burst_index(tilt_jump_flag), d_tilt_axis_plot(tilt_jump_flag), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
+    end
 
     hold off
-    l = legend('Location','best');
+
+    l2 = legend('Location', 'best');
     grid on
-    t.FontSize = 16;
-    xl.FontSize = 14;
-    yl.FontSize = 14;
-    l.FontSize = 12;
+    box on
+
+    t2.FontSize  = 16;
+    xl2.FontSize = 14;
+    yl2.FontSize = 14;
+    l2.FontSize  = 12;
 
     if ~isempty(save_plot_dir)
-        saveas(gca, fullfile(save_plot_dir, 'verificacion_orientacion'), 'png')
+        exportgraphics(f, fullfile(save_plot_dir, 'verificacion_orientacion.png'), 'Resolution', 300);
     end
 end
 
@@ -1007,57 +974,55 @@ fprintf('\t-Diferencia de presión respecto a la mediana: %d dbar\n\n', pressure
 %       mínima y límites +-mediana. Se marca el burst si la presión mínima
 %       supera alguno de los criterios.
 
-mean_pressure = NaN(nBursts_dat,1);
-for b = 1:minBursts
-    mean_pressure(b) = mean(data.dia(b).pressure_dbar);
-end
+mean_pressure = [data.dia_info.mean_pressure_dbar]';
 median_pressure = median(mean_pressure, 'omitnan');
 
-bad_pressure = isnan(mean_pressure) | ...
-               mean_pressure < min_pressure_limit | ...
-               abs(mean_pressure - median_pressure) > pressure_drop_limit;
+bad_pressure = isnan(mean_pressure) | mean_pressure < min_pressure_limit | abs(mean_pressure - median_pressure) > pressure_drop_limit;
 
-for b = 1:nBursts_dat
+for b = 1:nBursts
     data.quality.flags(b).pressure_flag = bad_pressure(b);
     if bad_pressure(b)
         fprintf('Burst %d presenta problemas de presión media\n', b)
     end
 end
 
-if do_plot
-    burst_counter_vec = [data.dat.burst_counter];
 
-    f = figure('Name','Verificación de presión','Color','w');
+if do_plot
+
+    f = figure('Name', 'Verificación de presión', 'Color', 'w');
+
     f.Position = [1, 1, 1900, 1000];
+
     hold on
+
     t = title('Verificación de presión media por burst');
     xl = xlabel('Burst');
     yl = ylabel('Presión media (dbar)');
 
-    plot(burst_counter_vec, mean_pressure, '-', 'DisplayName', 'Presión media', 'LineWidth', 1.5)
+    plot(burst_index, mean_pressure, '-', 'DisplayName', 'Presión media', 'LineWidth', 1.5);
 
-    yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima')
-    yline(median_pressure, '-', 'DisplayName', 'Mediana')
-    yline(median_pressure + pressure_drop_limit, ':', ...
-        'DisplayName', 'Mediana + límite')
-    yline(median_pressure - pressure_drop_limit, ':', ...
-        'DisplayName', 'Mediana - límite')
+    yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima');
+    yline(median_pressure, '-', 'DisplayName', 'Mediana');
+    yline(median_pressure + pressure_drop_limit, ':', 'DisplayName', 'Mediana + límite');
+    yline(median_pressure - pressure_drop_limit, ':', 'DisplayName', 'Mediana - límite');
 
-    scatter(burst_counter_vec(bad_pressure), ...
-            mean_pressure(bad_pressure), ...
-            40, 'r', 'filled', ...
-            'DisplayName', 'Burst marcado')
+    if any(bad_pressure)
+        scatter(burst_index(bad_pressure), mean_pressure(bad_pressure), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
+    end
 
     hold off
-    l = legend('Location','best');
+
+    l = legend('Location', 'best');
     grid on
-    t.FontSize = 16;
+    box on
+
+    t.FontSize  = 16;
     xl.FontSize = 14;
     yl.FontSize = 14;
-    l.FontSize = 12;
+    l.FontSize  = 12;
 
     if ~isempty(save_plot_dir)
-        saveas(gca, fullfile(save_plot_dir, 'verificacion_presion'), 'png')
+        exportgraphics(f, fullfile(save_plot_dir, 'verificacion_presion.png'), 'Resolution', 300);
     end
 end
 
@@ -1066,8 +1031,8 @@ end
 %       encuentran debajo del umbral establecido. Se elimina el burst si la
 %       cantidad de samples de baja presión superan un porcentaje deseado.
 
-bad_pressure_sample_percentage = NaN(nBursts_dat,1);
-for b = 1:minBursts
+bad_pressure_sample_percentage = NaN(nBursts,1);
+for b = 1:nBursts
     p = data.dia(b).pressure_dbar;
     idx_bad = p < min_pressure_limit;
     bad_pressure_sample_percentage(b) = 100*sum(idx_bad)/numel(p);
@@ -1075,7 +1040,7 @@ end
 
 sample_pressure_flag = bad_pressure_sample_percentage > bad_pressure_sample_percentage_limit;
 
-for b = 1:nBursts_dat
+for b = 1:nBursts
     data.quality.flags(b).pressure_sample_flag = sample_pressure_flag(b);
     if sample_pressure_flag(b)
         fprintf('Burst %d presenta presión menor a %.2f dbar en un %.2f %% de las muestras.\n', b, min_pressure_limit, bad_pressure_sample_percentage(b))
@@ -1083,52 +1048,57 @@ for b = 1:nBursts_dat
 end
 
 if do_plot
-    burst_counter_vec = [data.dat.burst_counter];
 
-    f = figure('Name','Verificación de muestras de presión','Color','w');
+    f = figure( ...
+        'Name', 'Verificación de muestras de presión', ...
+        'Color', 'w');
+
     f.Position = [1, 1, 1900, 1000];
+
     hold on
-    t = title('Verificación de muestras de presión. Porcentaje superior al límite.');
+
+    t = title(['Verificación de muestras de presión: ' 'porcentaje superior límite']);
+
     xl = xlabel('Burst');
     yl = ylabel('Porcentaje (%)');
 
-    plot(burst_counter_vec, bad_pressure_sample_percentage, '-', 'DisplayName', 'Porcentaje superior al límite', 'LineWidth', 1.5)
+    plot(burst_index, bad_pressure_sample_percentage, '-', 'DisplayName', 'Porcentaje superior al límite', 'LineWidth', 1.5);
 
-    yline(bad_pressure_sample_percentage_limit, '--', 'DisplayName', 'Porcentaje máximo')
+    yline(bad_pressure_sample_percentage_limit, '--', 'DisplayName', 'Porcentaje máximo');
 
-    scatter(burst_counter_vec(sample_pressure_flag), ...
-            bad_pressure_sample_percentage(sample_pressure_flag), ...
-            40, 'r', 'filled', ...
-            'DisplayName', 'Burst marcado')
+    if any(sample_pressure_flag)
+        scatter(burst_index(sample_pressure_flag), bad_pressure_sample_percentage(sample_pressure_flag), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
+    end
 
     hold off
-    l = legend('Location','best');
+
+    l = legend('Location', 'best');
     grid on
-    t.FontSize = 16;
+    box on
+
+    t.FontSize  = 16;
     xl.FontSize = 14;
     yl.FontSize = 14;
-    l.FontSize = 12;
+    l.FontSize  = 12;
 
     if ~isempty(save_plot_dir)
-        saveas(gca, fullfile(save_plot_dir, 'verificacion_presion_muestras'), 'png')
+        exportgraphics(f, fullfile(save_plot_dir, 'verificacion_presion_muestras.png'), 'Resolution', 300);
     end
 end
 
 
-fprintf('\nResumen: %d bursts marcados como problemáticos.\n', ...
-    sum(bad_pressure | sample_pressure_flag));
+fprintf('\nResumen: %d bursts marcados como problemáticos.\n', sum(bad_pressure | sample_pressure_flag));
 
 %% Resumen
 
 fprintf('\n----------------------------------              Resumen de verificaciones             ---------------------------------\n');
 
 samples_flag = [data.quality.flags.samples_flag]';
-size_flag        = [data.quality.flags.size_flag]';
 orientation_flag = [data.quality.flags.orientation_flag]';
 pressure_flag    = [data.quality.flags.pressure_flag]';
 pressure_sample_flag = [data.quality.flags.pressure_sample_flag]';
 
-bad_bursts = samples_flag | size_flag | orientation_flag | pressure_flag | pressure_sample_flag;
+bad_bursts = samples_flag | orientation_flag | pressure_flag | pressure_sample_flag;
 
 fprintf('\nTotal bursts malos detectados: %d de %d\n', ...
     sum(bad_bursts), length(bad_bursts));
@@ -1137,10 +1107,9 @@ fprintf('\nTotal bursts malos detectados: %d de %d\n', ...
 
 qc_summary = struct();
 
-qc_summary.total_bursts = nBursts_dat;
+qc_summary.total_bursts = nBursts;
 
 qc_summary.samples_flag_count     = sum(samples_flag);
-qc_summary.size_flag_count        = sum(size_flag);
 qc_summary.orientation_flag_count = sum(orientation_flag);
 qc_summary.pressure_flag_count    = sum(pressure_flag);
 qc_summary.pressure_sample_flag_count    = sum(pressure_sample_flag);
@@ -1156,22 +1125,21 @@ qc_summary.bad_indices  = find(bad_bursts);
 qc_summary.good_indices = find(~bad_bursts);
 
 % Rango temporal total
-qc_summary.time_start = data.dat(1).datetime;
-qc_summary.time_end   = data.dat(end).datetime;
+qc_summary.time_start = data.dia_info(1).datetime;
+qc_summary.time_end   = data.dia_info(end).end_datetime;
 
 % Rango temporal de bursts malos (si existen)
 if any(bad_bursts)
-    qc_summary.bad_datetimes = ...
-        [data.dat(bad_bursts).datetime];
+    qc_summary.bad_datetimes =[data.dia_info(bad_bursts).datetime]';
 else
-    qc_summary.bad_datetimes = datetime.empty(1,0);
+    qc_summary.bad_datetimes = datetime.empty(0,1);
 end
 
 % Guardar en struct principal
 data.quality.summary = qc_summary;
 
 % Guardar numero de mediciones de olas
-data.hdr.general.Number_of_wave_measurements = nBursts_dat;
+data.hdr.general.Number_of_diagnostic_bursts = nBursts;
 
 data.cleaning_status = false;
 data.preprocessing_status = false;
