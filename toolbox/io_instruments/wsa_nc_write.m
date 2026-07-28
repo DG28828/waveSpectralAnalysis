@@ -1,5 +1,5 @@
-function wsa_awac_nc_write(data, ncfile, varargin)
-%wsa_awac_nc_write - exporta datos AWAC a formato netCDF.
+function wsa_nc_write(data, ncfile, varargin)
+%wsa_nc_write - exporta datos de instrumentos a formato netCDF.
 %
 %   Esta función exporta una estructura de datos AWAC a un archivo netCDF.
 %   La estructura de entrada puede corresponder a datos crudos importados
@@ -146,7 +146,7 @@ function wsa_awac_nc_write(data, ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 15/07/2026
+% Fecha de modificación: 27/07/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -184,8 +184,59 @@ overwrite       = p.Results.overwrite;
 %% Verificaciones iniciales
 
 fprintf('\n\n========================================================================================================================\n');
-fprintf('=============================          Escritura de datos de AWAC a formato netCDF         =============================\n');
-fprintf('\nEscribir datos de archivos de AWAC a formato netCDF.\n');
+fprintf('=============================          Escritura de datos de instrumento a formato netCDF         =============================\n');
+fprintf('\nEscribir datos de instrumento a formato netCDF.\n');
+
+
+
+% Detectar el tipo de instrumento
+is_awac = isfield(data, 'whd') && isfield(data, 'wad');
+is_aquadopp = isfield(data, 'dia_info') && isfield(data, 'dia');
+if is_awac && is_aquadopp
+    error('El struct contiene simultáneamente campos AWAC y AQUADOPP. No es posible determinar el instrumento.');
+elseif is_awac
+    instrument_type = "AWAC";
+elseif is_aquadopp
+    instrument_type = "AQUADOPP";
+else
+    error('No fue posible identificar el instrumento. Se esperaba:\n  AWAC: data.whd y data.wad\n  AQUADOPP: data.dia_info y data.dia');
+end
+
+% Crear nombres comunes para procesamiento
+switch instrument_type
+
+    case "AWAC"
+        burst_info = data.whd;
+        burst_data = data.wad;
+        nSamples = data.hdr.setup.Wave_Number_of_samples;
+        sampling_rate_Hz = data.hdr.setup.Wave_Sampling_rate_Hz;
+
+    case "AQUADOPP"
+        burst_info = data.dia_info;
+        burst_data = data.dia;
+        nSamples = data.hdr.setup.Diagnostics_Number_of_samples;
+        sampling_rate_Hz = data.hdr.setup.Diagnostics_Sampling_rate_Hz;
+end
+
+% Cantidad de bursts
+nBurst = numel(burst_info);
+if numel(burst_data) ~= nBurst
+    error('La cantidad de registros de información (%d) y series de ráfaga (%d) no coincide.', nBurst, numel(burst_data));
+end
+
+%Verificar que whd no este vacio
+if nBurst == 0
+    error('La estructura de datos reporta cero bursts.');
+end
+
+% AWAC: Verificar que whd y wad tenga la misma cantidad de bursts
+if strcmp(instrument_type, "AWAC")
+    nBurstData = numel(burst_data);
+    if nBurstData ~= nBurst
+        error('whd (%d) y wad (%d) no tienen la misma cantidad de bursts.', ...
+            nBurst, nBurstData);
+    end
+end
 
 %Verificar existencia de archivo y sobreescritura
 if isfile(ncfile)
@@ -216,62 +267,51 @@ if ~isempty(outdir) && ~exist(outdir, 'dir')
     mkdir(outdir);
 end
 
-%Verificar existencia de campos whd y wad en struct de entrada
-if ~isfield(data, 'whd') || ~isfield(data, 'wad')
-    error('El struct de entrada no contiene whd, wad o ambos.');
-end
-
-%Verificar que whd no este vacio
-nBurst = numel(data.whd);
-if nBurst == 0
-    error('data.whd está vacío.');
-end
-
-%Verificar que whd y wad tenga la misma cantidad de bursts
-nBurstData = numel(data.wad);
-if nBurstData ~= nBurst
-    error('whd (%d) y wad (%d) no tienen la misma cantidad de bursts.', ...
-        nBurst, nBurstData);
-end
-
 %% Declarar variables
 % En esta sección se declaran las variables a guardar en el archivo netCDF,
 % con sus respectivos tamaños.
 
-nSamples = data.hdr.setup.Wave_Number_of_samples;           % Número de muestras (number of samples)
-nAst_sensors = size(data.wad(1).ast_distance_m, 2);    % Número de mediciones AST (number of AST measurements)
-nVel_beams = size(data.wad(1).beam_velocity_ms, 2);         % Número de beams apra velocidad (number of velocities beams)
-nBeams = numel(data.whd(1).noise_amp_beams);                % Número de beams (number of beams)
+nAst_sensors = 2;    % Número de mediciones AST (number of AST measurements)
+nVelBeams = 3;         % Número de beams apra velocidad (number of velocities beams)
+nBeams = 4;                % Número de beams (number of beams)
 naxis = 3;                                                   % Ejes coordenados del equipo (X, Y, Z)
+nAnalog_channels = 2;
 
-
-% Variables de whd
+% Variables de bursts
 time = nan(nBurst,1);
+
 burst_counter   = nan(nBurst,1);
 n_wave_records  = nan(nBurst,1);
 cell_position_m = nan(nBurst,1);
+
 battery_voltage_V = nan(nBurst,1);
 sound_speed_ms  = nan(nBurst,1);
 heading_deg     = nan(nBurst,1);
 pitch_deg       = nan(nBurst,1);
 roll_deg        = nan(nBurst,1);
 tilt_deg        = nan(nBurst,1);
+
 min_pressure_dbar = nan(nBurst,1);
 max_pressure_dbar = nan(nBurst,1);
 temperature_degC = nan(nBurst,1);
+
 cell_size_m     = nan(nBurst,1);
 noise_amp_beams = nan(nBeams, nBurst);
+
 ast_window_start_m  = nan(nBurst,1);
 ast_window_size_m   = nan(nBurst,1);
 ast_window_offset_m = nan(nBurst,1);
 
-% Variables de wad
-pressure_dbar = nan(nSamples, nBurst);
-ast_distance_m = nan(nSamples, nAst_sensors, nBurst);
-ast_quality = zeros(nSamples, nBurst, 'uint8');
-analog_input = zeros(nSamples, nBurst, 'uint8');
-beam_velocity_ms = nan(nSamples, nVel_beams, nBurst);
-amplitude = zeros(nSamples, nVel_beams, nBurst, 'uint8');
+
+% Variables de muestras
+pressure_dbar       = nan(nSamples, nBurst);
+ast_distance_m      = nan(nSamples, nAst_sensors, nBurst);
+ast_quality         = nan(nSamples, nBurst);
+analog_input        = nan(nSamples, nAnalog_channels, nBurst);
+beam_velocity_ms    = nan(nSamples, nVelBeams, nBurst);
+amplitude           = nan(nSamples, nVelBeams, nBurst);
+error_code          = nan(nSamples,nBurst);
+status_code         = nan(nSamples,nBurst);
 
 % Definir variable nQC para tamaño de flags
 if isfield(data, 'quality') && isfield(data.quality, 'flags')
@@ -281,15 +321,15 @@ else
 end
 
 % Variables de control de calidad
-samples_flag = nan(nQC,1);
-size_flag = nan(nQC,1);
-orientation_flag = nan(nQC,1);
-pressure_flag = nan(nQC,1);
-pressure_sample_flag = nan(nQC,1);
-bad_tilt_flag = nan(nQC,1);
-warning_tilt_flag_5 = nan(nQC,1);
-warning_tilt_flag_10 = nan(nQC,1);
-warning_tilt_flag_20 = nan(nQC,1);
+samples_flag            = nan(nQC,1);
+size_flag               = nan(nQC,1);
+orientation_flag        = nan(nQC,1);
+pressure_flag           = nan(nQC,1);
+pressure_sample_flag    = nan(nQC,1);
+bad_tilt_flag           = nan(nQC,1);
+warning_tilt_flag_5     = nan(nQC,1);
+warning_tilt_flag_10    = nan(nQC,1);
+warning_tilt_flag_20    = nan(nQC,1);
 
 %% Extraer datos
 % En esta sección se extraen los datos del struct de entrada, ya sea data
@@ -298,88 +338,154 @@ warning_tilt_flag_20 = nan(nQC,1);
 %---------------          Datos de archivo .hdr          --------------- 
 transformation_matrix = data.hdr.head_configuration.Transformation_matrix;
 
-%Extraer datos de whd y wad
+%Extraer datos de burst y muestras por burst
+
 for i = 1:nBurst
-    wi = data.whd(i);
-    wd = data.wad(i);
-    
-    %---------------          Datos de archivo .whd          --------------- 
-    time(i) = wsa_datetime2posix(wi.datetime); % Tiempo: guardar como segundos POSIX
-    burst_counter(i)        = wsa_get_struct_field(wi, 'burst_counter');
-    n_wave_records(i)       = wsa_get_struct_field(wi, 'n_wave_records');
-    cell_position_m(i)      = wsa_get_struct_field(wi, 'cell_position_m');
-    battery_voltage_V(i)    = wsa_get_struct_field(wi, 'battery_voltage_V');
-    sound_speed_ms(i)       = wsa_get_struct_field(wi, 'sound_speed_ms');
-    heading_deg(i)          = wsa_get_struct_field(wi, 'heading_deg');
-    pitch_deg(i)            = wsa_get_struct_field(wi, 'pitch_deg');
-    roll_deg(i)             = wsa_get_struct_field(wi, 'roll_deg');
-    tilt_deg(i)             = wsa_get_struct_field(wi, 'tilt_deg');
-    min_pressure_dbar(i)    = wsa_get_struct_field(wi, 'min_pressure_dbar');
-    max_pressure_dbar(i)    = wsa_get_struct_field(wi, 'max_pressure_dbar');
-    temperature_degC(i)     = wsa_get_struct_field(wi, 'temperature_degC');
-    cell_size_m(i)          = wsa_get_struct_field(wi, 'cell_size_m');
-    ast_window_start_m(i)   = wsa_get_struct_field(wi, 'ast_window_start_m');
-    ast_window_size_m(i)    = wsa_get_struct_field(wi, 'ast_window_size_m');
-    ast_window_offset_m(i)  = wsa_get_struct_field(wi, 'ast_window_offset_m');
-    tmp_noise               = wsa_get_struct_field(wi, 'noise_amp_beams');
-    if ~isempty(tmp_noise)
-        noise_amp_beams(:,i) = double(tmp_noise(:));
+
+    bi = burst_info(i);
+    bd = burst_data(i);
+
+    % Tiempo
+    time(i) = wsa_datetime2posix(wsa_get_struct_field(bi, 'datetime'));
+
+    % Variables comunes de burst
+    n_wave_records(i) = get_scalar_field(bi, 'n_wave_records');
+    if isnan(n_wave_records(i))
+        n_wave_records(i) = get_scalar_field(bi, 'n_diagnostic_records');
     end
+
+    % Variables comunes
+    battery_voltage_V(i) = get_scalar_field(bi, 'battery_voltage_V');
+    sound_speed_ms(i)     = get_scalar_field(bi, 'sound_speed_ms');
+    heading_deg(i)        = get_scalar_field(bi, 'heading_deg');
+    pitch_deg(i)          = get_scalar_field(bi, 'pitch_deg');
+    roll_deg(i)           = get_scalar_field(bi, 'roll_deg');
+    tilt_deg(i)           = get_scalar_field(bi, 'tilt_deg');
+    min_pressure_dbar(i)  = get_scalar_field(bi, 'min_pressure_dbar');
+    max_pressure_dbar(i)  = get_scalar_field(bi, 'max_pressure_dbar');
+    temperature_degC(i)   = get_scalar_field(bi, 'temperature_degC');
     
-    %---------------          Datos de archivo .wad          --------------- 
-    % pressure_dbar
-    tmp_pressure = double(wd.pressure_dbar(:));
-    nAvail = min(nSamples, numel(tmp_pressure));
-    pressure_dbar(1:nAvail, i) = tmp_pressure(1:nAvail);
+    % Variables exclusivas del AWAC
+    burst_counter(i)      = get_scalar_field(bi, 'burst_counter');
+    cell_position_m(i)    = get_scalar_field(bi, 'cell_position_m');
+    cell_size_m(i)        = get_scalar_field(bi, 'cell_size_m');
+    ast_window_start_m(i) = get_scalar_field(bi, 'ast_window_start_m');
+    ast_window_size_m(i)  = get_scalar_field(bi, 'ast_window_size_m');
+    ast_window_offset_m(i)= get_scalar_field(bi, 'ast_window_offset_m');
     
-    % ast_distance_m
-    tmp_ast = double(wd.ast_distance_m);
-    [nr, nc] = size(tmp_ast);
-    nr = min(nSamples, nr);
-    nc = min(nAst_sensors, nc);
-    ast_distance_m(1:nr, 1:nc, i) = tmp_ast(1:nr, 1:nc);
-    
-    % ast_quality
-    tmp_astq = uint8(wd.ast_quality(:));
-    nAvail = min(nSamples, numel(tmp_astq));
-    ast_quality(1:nAvail, i) = tmp_astq(1:nAvail);
-    
-    % analog_input
-    tmp_ai = uint8(wd.analog_input(:));
-    nAvail = min(nSamples, numel(tmp_ai));
-    analog_input(1:nAvail, i) = tmp_ai(1:nAvail);
-    
-    % beam_velocity_ms
-    tmp_vel = double(wd.beam_velocity_ms);
-    [nr, nc] = size(tmp_vel);
-    nr = min(nSamples, nr);
-    nc = min(nVel_beams, nc);
-    beam_velocity_ms(1:nr, 1:nc, i) = tmp_vel(1:nr, 1:nc);
-    
-    % amplitude
-    tmp_amp = uint8(wd.amplitude);
-    [nr, nc] = size(tmp_amp);
-    nr = min(nSamples, nr);
-    nc = min(nVel_beams, nc);
-    amplitude(1:nr, 1:nc, i) = tmp_amp(1:nr, 1:nc);
+    tmp_noise = wsa_get_struct_field(bi, 'noise_amp_beams');
+    if ~isempty(tmp_noise)
+        n = min(nVelBeams,numel(tmp_noise));
+        noise_amp_beams(1:n,i) = ...
+            double(tmp_noise(1:n));
+    end
+
+    % Presión
+    tmp = wsa_get_struct_field(bd, 'pressure_dbar');
+    if ~isempty(tmp)
+        tmp = double(tmp(:));
+        nr = min(nSamples,numel(tmp));
+        pressure_dbar(1:nr,i) = tmp(1:nr);
+    end
+
+    % Velocidades
+    tmp = wsa_get_struct_field(bd, 'beam_velocity_ms');
+    if ~isempty(tmp)
+        tmp = double(tmp);
+        nr = min(nSamples,size(tmp,1));
+        nc = min(nVelBeams,size(tmp,2));
+
+        beam_velocity_ms(1:nr,1:nc,i) = ...
+            tmp(1:nr,1:nc);
+    end
+
+    % Amplitudes
+    tmp = wsa_get_struct_field(bd, 'amplitude');
+    if ~isempty(tmp)
+        tmp = double(tmp);
+        nr = min(nSamples,size(tmp,1));
+        nc = min(nVelBeams,size(tmp,2));
+
+        amplitude(1:nr,1:nc,i) = tmp(1:nr,1:nc);
+    end
+
+    % AST, solo AWAC
+    tmp = wsa_get_struct_field(bd, 'ast_distance_m');
+    if ~isempty(tmp)
+        tmp = double(tmp);
+        nr = min(nSamples,size(tmp,1));
+        nc = min(nAstSensors,size(tmp,2));
+
+        ast_distance_m(1:nr,1:nc,i) = tmp(1:nr,1:nc);
+    end
+    tmp = wsa_get_struct_field(bd, 'ast_quality');
+    if ~isempty(tmp)
+        tmp = double(tmp(:));
+        nr = min(nSamples,numel(tmp));
+        ast_quality(1:nr,i) = tmp(1:nr);
+    end
+
+    % Entradas analógicas
+    if instrument_type == "AWAC"
+
+        tmp = wsa_get_struct_field( bd, 'analog_input');
+        if ~isempty(tmp)
+            tmp = double(tmp(:));
+            nr = min(nSamples,numel(tmp));
+
+            analog_input(1:nr,1,i) = tmp(1:nr);
+        end
+
+    else
+        tmp1 = wsa_get_struct_field(bd, 'analog1');
+        tmp2 = wsa_get_struct_field(bd, 'analog2');
+        if ~isempty(tmp1)
+            tmp1 = double(tmp1(:));
+            nr = min(nSamples,numel(tmp1));
+            analog_input(1:nr,1,i) = tmp1(1:nr);
+        end
+        if ~isempty(tmp2)
+            tmp2 = double(tmp2(:));
+            nr = min(nSamples,numel(tmp2));
+            analog_input(1:nr,2,i) = tmp2(1:nr);
+        end
+    end
+
+    % Códigos Aquadopp
+    tmp = wsa_get_struct_field(bd, 'error_code');
+    if ~isempty(tmp)
+        tmp = double(tmp(:));
+        nr = min(nSamples,numel(tmp));
+        error_code(1:nr,i) = tmp(1:nr);
+    end
+
+    tmp = wsa_get_struct_field(bd, 'status_code');
+    if ~isempty(tmp)
+        tmp = double(tmp(:));
+        nr = min(nSamples,numel(tmp));
+        status_code(1:nr,i) = tmp(1:nr);
+    end
 end
+
 
 %------------       Datos de archivo calidad de los datos       ----------- 
 if isfield(data, 'quality') && isfield(data.quality, 'flags')
     nQC = numel(data.quality.flags);
 
-    for i = 1:nQC
-        qf = data.quality.flags(i);
-        samples_flag(i)     = wsa_get_struct_field(qf, 'samples_flag');
-        size_flag(i)        = wsa_get_struct_field(qf, 'size_flag');
-        orientation_flag(i) = wsa_get_struct_field(qf, 'orientation_flag');
-        pressure_flag(i)    = wsa_get_struct_field(qf, 'pressure_flag');
-        pressure_sample_flag(i)    = wsa_get_struct_field(qf, 'pressure_sample_flag');
-        bad_tilt_flag(i)    = wsa_get_struct_field(qf, 'bad_tilt_flag');
-        warning_tilt_flag_5(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_5');
-        warning_tilt_flag_10(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_10');
-        warning_tilt_flag_20(i)= wsa_get_struct_field(qf, 'warning_tilt_flag_20');
-    end
+for i = 1:nQC
+
+    qf = data.quality.flags(i);
+
+    samples_flag(i) = get_scalar_field(qf, 'samples_flag');
+    size_flag(i) = get_scalar_field(qf, 'size_flag');
+    orientation_flag(i) = get_scalar_field(qf, 'orientation_flag');
+    pressure_flag(i) = get_scalar_field(qf, 'pressure_flag');
+    pressure_sample_flag(i) = get_scalar_field(qf, 'pressure_sample_flag');
+    bad_tilt_flag(i) = get_scalar_field(qf, 'bad_tilt_flag');
+    warning_tilt_flag_5(i) = get_scalar_field(qf, 'warning_tilt_flag_5');
+    warning_tilt_flag_10(i) = get_scalar_field(qf, 'warning_tilt_flag_10');
+    warning_tilt_flag_20(i) = get_scalar_field(qf, 'warning_tilt_flag_20');
+end
 end
 
 
@@ -405,14 +511,14 @@ end
 if isfield(data, 'cleaning_status') && data.cleaning_status
     nGood = sum(~is_bad_burst);
     if nGood ~= nBurst
-        error('Las banderas de limpieza indican %d ráfagas válidas, pero data.whd y data.wad contienen %d ráfagas.', nGood, nBurst);
+        error('Las banderas de limpieza indican %d ráfagas válidas, pero burst_info y burst_data contienen %d ráfagas.', nGood, nBurst);
     end
 
 else
     % En datos sin limpiar, burst y burst_raw deberían coincidir
     if nQC ~= nBurst
         error(['Los datos no están marcados como limpios, pero existen ' ...
-               '%d ráfagas en quality.flags y %d en data.whd.'], ...
+               '%d ráfagas en quality.flags y %d en burst_info.'], ...
                nQC, nBurst);
     end
 end
@@ -528,7 +634,7 @@ wsa_nc_create_var( ...
 wsa_nc_create_var( ...
                   ncfile, ...
                   'velocity_beams', ...
-                  {'sample', nSamples, 'vel_beam', nVel_beams, 'burst', nBurst}, ...
+                  {'sample', nSamples, 'vel_beam', nVelBeams, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm/s', ...
                   'long_name', 'orbital velocity along beam (m/s)', ...
@@ -539,7 +645,7 @@ wsa_nc_create_var( ...
 wsa_nc_create_var( ...
                   ncfile, ...
                   'amplitude', ...
-                  {'sample', nSamples, 'vel_beam', nVel_beams, 'burst', nBurst}, ...
+                  {'sample', nSamples, 'vel_beam', nVelBeams, 'burst', nBurst}, ...
                   'uint8', ...
                   'units', 'count', ...
                   'long_name', 'signal amplitude (counts)', ...
@@ -570,7 +676,7 @@ wsa_nc_create_var( ...
 wsa_nc_create_var( ...
                   ncfile, ...
                   'analog_input', ...
-                  {'sample', nSamples, 'burst', nBurst}, ...
+                  {'sample', nSamples, 'analog_channel', nAnalog_channels, 'burst', nBurst}, ...
                   'uint8', ...
                   'units', 'count', ...
                   'long_name', 'analog input' ...
@@ -580,11 +686,27 @@ wsa_nc_create_var( ...
 wsa_nc_create_var( ...
                   ncfile, ...
                   'transformation_matrix', ...
-                  {'axis', naxis, 'vel_beam', nVel_beams}, ...
+                  {'axis', naxis, 'vel_beam', nVelBeams}, ...
                   'double', ...
                   'units', '', ...
                   'long_name', 'Transformation matrix for velocities' ...
                   );
+
+wsa_nc_create_var( ...
+                    ncfile, ...
+                    'error_code', ...
+                    {'sample', nSamples, 'burst', nBurst}, ...
+                    'double', ...
+                    'units', '1', ...
+                    'long_name', 'instrument error code');
+
+wsa_nc_create_var( ...
+                    ncfile, ...
+                    'status_code', ...
+                    {'sample', nSamples, 'burst', nBurst}, ...
+                    'double', ...
+                    'units', '1', ...
+                    'long_name', 'instrument status code');
 
 
 %% Escribir datos
@@ -619,10 +741,12 @@ ncwrite(ncfile, 'analog_input', analog_input);
 ncwrite(ncfile, 'velocity_beams', beam_velocity_ms);
 ncwrite(ncfile, 'amplitude', amplitude);
 ncwrite(ncfile, 'transformation_matrix', transformation_matrix);
+ncwrite(ncfile, 'error_code', error_code);
+ncwrite(ncfile, 'status_code', status_code);
 
 %% Atributos globales
 
-ncwriteatt(ncfile, '/', 'title', 'AWAC campaign data');
+ncwriteatt(ncfile, '/', 'title', sprintf('%s campaign data', instrument_type));
 ncwriteatt(ncfile, '/', 'id', [char(site_name), '_', char(campaign_name)])
 ncwriteatt(ncfile, '/', 'site', char(site_name));
 ncwriteatt(ncfile, '/', 'campaign', char(campaign_name));
@@ -640,6 +764,7 @@ else
     ncwriteatt(ncfile, '/', 'time_end', char(string(data.quality.summary.time_end)));
 end
 
+ncwriteatt(ncfile, '/', 'instrument_type', char(instrument_type));
 ncwriteatt(ncfile, '/', 'instrument_serial', char(data.hdr.hardware_configuration.Serial_number));
 ncwriteatt(ncfile, '/', 'head_serial', char(data.hdr.head_configuration.Serial_number));
 
@@ -650,8 +775,8 @@ else
     ncwriteatt(ncfile, '/', 'mounting_height_m', 'not specified');
 end
 
-ncwriteatt(ncfile, '/', 'Coordinate_system', char(data.hdr.setup.Coordinate_system));
-ncwriteatt(ncfile, '/', 'Blanking_distance_m', double(data.hdr.setup.Blanking_distance_m));
+ncwriteatt(ncfile, '/', 'coordinate_system', char(data.hdr.setup.Coordinate_system));
+ncwriteatt(ncfile, '/', 'blanking_distance_m', double(data.hdr.setup.Blanking_distance_m));
 
 
 ncwriteatt(ncfile, '/', 'cleaning_status', double(data.cleaning_status));
@@ -665,22 +790,22 @@ end
 
 
 
-if isfield(data, 'cleaning')
-    ncwriteatt(ncfile, '/', 'Number_of_wave_measurements', double(data.cleaning.Number_of_wave_measurements));
-else
-    ncwriteatt(ncfile, '/', 'Number_of_wave_measurements', double(data.hdr.general.Number_of_wave_measurements));
-end
+ncwriteatt(ncfile, '/', 'number_of_bursts', double(nBurst));
 
 
 if isfield(data, 'hdr')
     gi = data.hdr;
 
-    if isfield(gi, 'setup') && isfield(gi.setup, 'Wave_Sampling_rate_Hz')
-        ncwriteatt(ncfile, '/', 'wave_sampling_rate_Hz', double(gi.setup.Wave_Sampling_rate_Hz));
+    if isfinite(sampling_rate_Hz) && sampling_rate_Hz > 0
+        ncwriteatt(ncfile, '/', 'sampling_rate_Hz', double(sampling_rate_Hz));
+    else
+        error('No se dispone de una frecuencia de muestreo válida.');
     end
-
-    if isfield(gi, 'setup') && isfield(gi.setup, 'Wave_Number_of_samples')
-        ncwriteatt(ncfile, '/', 'wave_number_of_samples', double(gi.setup.Wave_Number_of_samples));
+    
+    if isfinite(nSamples) && nSamples > 0
+        ncwriteatt(ncfile, '/', 'number_of_samples', double(nSamples));
+    else
+        error('No se dispone de un número de muestras válido.');
     end
 
     if isfield(gi, 'general') && isfield(gi.general, 'Time_of_first_measurement')
@@ -694,11 +819,50 @@ if isfield(data, 'hdr')
     end
 end
 
+switch instrument_type
+    case "AWAC"
+        burst_interval_s = wsa_get_struct_field(data.hdr.setup, 'Wave_Interval_s');
+        burst_duration_s = wsa_get_struct_field(data.hdr.setup, 'Wave_burst_duration_s');
+
+    case "AQUADOPP"
+        burst_interval_s = wsa_get_struct_field(data.hdr.setup, 'Diagnostics_Interval_s');
+        burst_duration_s = wsa_get_struct_field(data.hdr.setup, 'Diagnostics_burst_duration_s');
+end
+ncwriteatt(ncfile, '/', 'burst_interval_s', double(burst_interval_s));
+ncwriteatt(ncfile, '/', 'burst_duration_s', double(burst_duration_s));
+
+
 ncwriteatt(ncfile, '/', 'source', 'WSA toolbox');
 
 
 fprintf('\nArchivo escrito correctamente.\n');
 
 fprintf('\n========================================================================================================================\n');
+
+
+
+
+function value = get_scalar_field(s, field_name, default_value)
+
+if nargin < 3
+    default_value = NaN;
+end
+
+if ~isstruct(s) || ~isfield(s, field_name)
+    value = default_value;
+    return
+end
+
+value = s.(field_name);
+
+if isempty(value) || ~(isnumeric(value) || islogical(value)) || ~isscalar(value)
+    value = default_value;
+else
+    value = double(value);
+end
+
+end
+
+
 
 end
