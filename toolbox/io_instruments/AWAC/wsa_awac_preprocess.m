@@ -160,16 +160,19 @@ function info = wsa_awac_preprocess(ncfile, varargin)
 
 ast_corr_flag_default = true;
 filter_flag_default = true;
+IG_filter_flag_default = true;
 
 p = inputParser;
 addRequired(p, 'ncfile');
 addParameter(p, 'ast_corr_flag', ast_corr_flag_default)
 addParameter(p, 'filter_flag', filter_flag_default);
+addParameter(p, 'IG_filter_flag', IG_filter_flag_default);
 
 parse(p, ncfile, varargin{:});
 
 ast_corr_flag = p.Results.ast_corr_flag;
 filter_flag = p.Results.filter_flag;
+IG_filter_flag = p.Results.IG_filter_flag;
 
 %% Verificaciones iniciales
 
@@ -285,15 +288,19 @@ for b = 1:nBursts
     velocity_enu(:, 3, b) = vel_out.enu(3, :);
 end
 
-%% Filtrado de las señales de presión, ast y velocidades
-fc = 1/340; % Hz        %Frecuencia de corte
-filter_order = 4;       %Orden del filtro
+%% Filtrado de las señales de presión, ast y velocidades en banda de freuencia apta para el análisis direccional
+
+% Se aplica un filtro pasabanda con las siguientes frecuencias de corte:
+%  - Frecuecia de corte inferior: 1/30 Hz (30 s)
+%  - Frecuencia de corte superior: 1/2 Hz (2 s)
+
+f_i = 1/30;
+f_f = 1/2; 
 
 if filter_flag
 
     % Presión
-    out_pressure_filt = wsa_highpass_filter(pressure, wave_sampling_rate, fc, filter_order);
-    pressure_proc = out_pressure_filt.x_filt;
+    pressure_proc = wsa_bandpass_filter(pressure, wave_sampling_rate, f_i, f_f);
 
     % AST
     ast_proc = nan(size(ast_corr));
@@ -304,12 +311,11 @@ if filter_flag
             AST_i = AST_i(:);
         end
 
-        out_ast_filt = wsa_highpass_filter(AST_i, wave_sampling_rate, fc, filter_order);
+        ast_filt = wsa_bandpass_filter(AST_i, wave_sampling_rate, f_i, f_f);
 
-        ast_proc(:, iAST, :) = reshape(out_ast_filt.x_filt, size(ast_corr,1), 1, []);
+        ast_proc(:, iAST, :) = reshape(ast_filt, size(ast_corr,1), 1, []);
     end
-    out_ast_filt_comb = wsa_highpass_filter(ast_corr_comb, 2*wave_sampling_rate, fc, filter_order);
-    ast_proc_comb = out_ast_filt_comb.x_filt;
+    ast_proc_comb = wsa_bandpass_filter(ast_corr_comb, 2*wave_sampling_rate, f_i, f_f);
 
     % Velocidades ENU
     velocity_proc = nan(size(velocity_enu));
@@ -320,19 +326,60 @@ if filter_flag
             vel_i = vel_i(:);
         end
 
-        out_vel_filt = wsa_highpass_filter(vel_i, wave_sampling_rate, fc, filter_order);
+        vel_filt = wsa_bandpass_filter(vel_i, wave_sampling_rate, f_i, f_f);
+        velocity_proc(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
 
-        velocity_proc(:, iVel, :) = reshape( ...
-            out_vel_filt.x_filt, ...
-            size(velocity_enu,1), ...
-            1, ...
-            []);
     end
 else
     pressure_proc = pressure;
     ast_proc = ast_corr;
     velocity_proc = velocity_enu;
 end
+
+%% Filtrado de las señales de presión, ast y velocidades en la banda de frecuencia IG
+
+% Se aplica un filtro pasabanda con las siguientes frecuencias de corte:
+%  - Frecuecia de corte inferior: 1/300 Hz (300 s)
+%  - Frecuencia de corte superior: 1/30 Hz (30 s)
+
+f_i_IG = 1/300;
+f_f_IG = 1/30; 
+
+if IG_filter_flag
+
+    % Presión
+    pressure_proc_IG = wsa_bandpass_filter(pressure, wave_sampling_rate, f_i_IG, f_f_IG);
+
+    % AST
+    ast_proc_IG = nan(size(ast_corr));
+    for iAST = 1:2
+        AST_i = squeeze(ast_corr(:, iAST, :));
+
+        if isrow(AST_i)
+            AST_i = AST_i(:);
+        end
+
+        ast_filt_IG = wsa_bandpass_filter(AST_i, wave_sampling_rate, f_i_IG, f_f_IG);
+
+        ast_proc_IG(:, iAST, :) = reshape(ast_filt_IG, size(ast_corr,1), 1, []);
+    end
+    ast_proc_comb_IG = wsa_bandpass_filter(ast_corr_comb, 2*wave_sampling_rate, f_i_IG, f_f_IG);
+
+    % Velocidades ENU
+    velocity_proc_IG = nan(size(velocity_enu));
+    for iVel = 1:3
+        vel_i = squeeze(velocity_enu(:, iVel, :));
+
+        if isrow(vel_i)
+            vel_i = vel_i(:);
+        end
+
+        vel_filt = wsa_bandpass_filter(vel_i, wave_sampling_rate, f_i_IG, f_f_IG);
+
+        velocity_proc_IG(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
+    end
+end
+
 
 %% Escribir nuevas variables al archivo netCDF
 
@@ -351,20 +398,45 @@ write_nc_variable(ncfile, 'pressure_proc', pressure_proc, ...
     {'sample', size(pressure_proc,1), ...
      'burst', size(pressure_proc,2)}, ...
      'units', 'dBar', ...
-     'description', ['Presión procesada mediante filtro pasa altas con fc de ', num2str(fc), ' Hz.']);
+     'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
+
+if IG_filter_flag
+    write_nc_variable(ncfile, 'pressure_proc_IG', pressure_proc_IG, ...
+        {'sample', size(pressure_proc_IG,1), ...
+         'burst', size(pressure_proc_IG,2)}, ...
+         'units', 'dBar', ...
+         'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/303 Hz a 1/30 Hz');
+end
 
 write_nc_variable(ncfile, 'ast_proc', ast_proc, ...
     {'sample', size(ast_proc,1), ...
      'ast_sensor', size(ast_proc,2), ...
      'burst', size(ast_proc,3)}, ...
      'units', 'm', ...
-     'description', ['AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa altas con fc de ', num2str(fc), ' Hz.']);
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
+
+if IG_filter_flag
+    write_nc_variable(ncfile, 'ast_proc_IG', ast_proc_IG, ...
+        {'sample', size(ast_proc_IG,1), ...
+         'ast_sensor', size(ast_proc_IG,2), ...
+         'burst', size(ast_proc_IG,3)}, ...
+         'units', 'm', ...
+         'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
+end
 
 write_nc_variable(ncfile, 'ast_proc_comb', ast_proc_comb, ...
     {'sample_ast', size(ast_proc_comb,1), ...
      'burst', size(ast_proc_comb,2)}, ...
      'units', 'm', ...
-     'description', ['AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa altas con fc de ', num2str(fc), ' Hz. Señal combinada a doble frecuencia de muestreo.']);
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz. Señal combinada a doble frecuencia de muestreo.');
+
+if IG_filter_flag
+    write_nc_variable(ncfile, 'ast_proc_comb_IG', ast_proc_comb_IG, ...
+        {'sample_ast', size(ast_proc_comb_IG,1), ...
+         'burst', size(ast_proc_comb_IG,2)}, ...
+         'units', 'm', ...
+         'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz. Señal combinada a doble frecuencia de muestreo.');
+end
 
 write_nc_variable(ncfile, 'velocity_enu', velocity_enu, ...
     {'sample', size(velocity_enu,1), ...
@@ -378,7 +450,16 @@ write_nc_variable(ncfile, 'velocity_proc', velocity_proc, ...
      'enu_component', size(velocity_proc,2), ...
      'burst', size(velocity_proc,3)}, ...
      'units', 'm/s', ...
-     'description', ['Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa altas con fc de ', num2str(fc), ' Hz.']');
+     'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
+
+if IG_filter_flag
+    write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
+        {'sample', size(velocity_proc_IG,1), ...
+         'enu_component', size(velocity_proc_IG,2), ...
+         'burst', size(velocity_proc_IG,3)}, ...
+         'units', 'm/s', ...
+         'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
+end
 
 write_nc_variable(ncfile, 'ast_mean', ast_mean, ...
     {'burst', nBursts}, ...
@@ -399,8 +480,13 @@ write_nc_variable(ncfile, 'ast_bad_detects_percentage', ast_bad_detects_percenta
 
 %Atributos del procesamiento
 ncwriteatt(ncfile, '/', 'processing_filter_flag', double(filter_flag));
-ncwriteatt(ncfile, '/', 'processing_highpass_fc_Hz', fc);
-ncwriteatt(ncfile, '/', 'processing_highpass_order', filter_order);
+ncwriteatt(ncfile, '/', 'processing_bandpass_fi_Hz', f_i);
+ncwriteatt(ncfile, '/', 'processing_bandpass_ff_Hz', f_f);
+
+if IG_filter_flag
+    ncwriteatt(ncfile, '/', 'processing_bandpass_IG_fi_Hz', f_i_IG);
+    ncwriteatt(ncfile, '/', 'processing_bandpass_IG_ff_Hz', f_f_IG);
+end
 
 %Indicar que se aplicó el preprocesamiento
 ncwriteatt(ncfile, '/', 'preprocessing_status', double(true));
@@ -410,16 +496,19 @@ ncwriteatt(ncfile, '/', 'preprocessing_status', double(true));
 info.ast.raw = ast;
 info.ast.corr = ast_corr;
 info.ast.proc = ast_proc;
+info.ast.proc_IG = ast_proc_IG;
 
 info.ast.ast_bad_detects = ast_bad_detects;
 info.ast.ast_bad_detects_percentage = ast_bad_detects_percentage;
 
 info.pressure.raw = pressure;
 info.pressure.proc = pressure_proc;
+info.pressure.proc_IG = pressure_proc_IG;
 
 info.velocity_beams.raw = velocity_beams;
 info.velocity_enu.raw = velocity_enu;
 info.velocity_enu.proc = velocity_proc;
+info.velocity_enu.proc_IG = velocity_proc_IG;
 
 info.transformation_matrix = transformation_matrix;
 info.heading = heading;
@@ -427,8 +516,13 @@ info.pitch = pitch;
 info.roll = roll;
 
 info.filter.flag = filter_flag;
-info.filter.fc = fc;
-info.filter.order = filter_order;
+info.filter.f_i = f_i;
+info.filter.f_f = f_f;
+
+if IG_filter_flag
+    info.filter.f_i_IG = f_i_IG;
+    info.filter.f_f_IG = f_f_IG;
+end
 
 %% Graficos de prueba
 
