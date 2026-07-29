@@ -2,6 +2,8 @@ function [ast_despike, acceleration, acc_idx] = wsa_ast_acc_despike(ast, fs, g)
 
 dt = 1/fs;
 
+ast_despike = ast;
+
 %Estimación de la aceleración de la señal (segunda derivada)
 acc = diff(ast, 2)/dt^2;
 acceleration = NaN(size(ast));
