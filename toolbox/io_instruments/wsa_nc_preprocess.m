@@ -7,7 +7,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 29/07/2026
+% Fecha de modificación: 30/07/2026
 % -------------------------------------------------------------------------
 %% Manejo de entradas
 
@@ -53,14 +53,7 @@ fprintf('\nInstrumento: %s.\n', instrument_type);
 %% Verificar variables requeridas
 
 % Variables comunes
-common_req_vars = {'time', 'pressure', 'velocity_beams', 'transformation_matrix', 'heading', 'pitch', 'roll'};
-
-%Variables adicionales si es AWAC
-if is_awac
-    required_vars = [common_req_vars, {'ast'}];
-else
-    required_vars = common_req_vars;
-end
+required_vars = {'time', 'pressure', 'ast', 'velocity_beams', 'transformation_matrix', 'heading', 'pitch', 'roll'};
 
 nc_info = ncinfo(ncfile);
 nc_var_names = {nc_info.Variables.Name};
@@ -89,14 +82,10 @@ if size(velocity_beams, 1) ~= nSamples || size(velocity_beams, 3) ~= nBursts
     error('Las dimensiones de pressure y vesampling_rate_Hzlocity_beams no son consistentes.');
 end
 
-if is_awac
-    ast = double(ncread(ncfile, 'ast'));
-    if size(ast, 1) ~= nSamples || size(ast, 3) ~= nBursts
-        error('Las dimensiones de ast no coinciden con pressure.');
-    end
-else
-    % Mantener estructura estándar para Aquadopp.
-    ast = nan(nSamples, 2, nBursts);
+ast = double(ncread(ncfile, 'ast'));
+if size(ast,1) ~= nSamples || size(ast,2) ~= 2 || size(ast,3) ~= nBursts
+
+    error('La variable ast debe tener dimensiones sample × 2 × burst.');
 end
 
 %% Información de muestreo
@@ -118,14 +107,9 @@ end
 sample_offset_s = (0:nSamples-1)' / sampling_rate;
 burst_time = sample_offset_s + reshape(time, 1, []);
 
-if is_awac
-    ast_sampling_rate_Hz = 2*sampling_rate;
-    sample_ast_offset_s = (0:2*nSamples-1)'/ast_sampling_rate_Hz;
-    burst_time_ast = sample_ast_offset_s + reshape(time, 1, []);
-else
-    ast_sampling_rate_Hz = NaN;
-    burst_time_ast = [];
-end
+ast_sampling_rate_Hz = 2*sampling_rate;
+sample_ast_offset_s = (0:2*nSamples-1)'/ast_sampling_rate_Hz;
+burst_time_ast = sample_ast_offset_s + reshape(time,1,[]);
 
 %% Procesamiento de las señales AST
 
@@ -184,11 +168,11 @@ if is_awac
     end
 else
 
-    ast_corr = [];
-    ast_corr_comb = [];
-    ast_mean = [];
-    ast_bad_detects = [];
-    ast_bad_detects_percentage = [];
+    ast_corr = nan(nSamples, 2, nBursts);
+    ast_corr_comb = nan(2*nSamples, nBursts);
+    ast_mean = nan(nBursts, 1);
+    ast_bad_detects = nan(2, nBursts);
+    ast_bad_detects_percentage = nan(2, nBursts);
 
     if ast_corr_flag
         fprintf('\nCorrección AST omitida: el AQUADOPP no dispone de mediciones AST.\n');
@@ -228,6 +212,17 @@ for b = 1:nBursts
         velocity_enu(:,component,b) = detrend(x,1);
     end
 end
+
+%% Inicializar variables procesadas
+
+pressure_proc = nan(nSamples, nBursts);
+velocity_proc = nan(nSamples, 3, nBursts);
+ast_proc = nan(nSamples, 2, nBursts);
+ast_proc_comb = nan(2*nSamples, nBursts);
+pressure_proc_IG = nan(nSamples, nBursts);
+velocity_proc_IG = nan(nSamples, 3, nBursts);
+ast_proc_IG = nan( nSamples, 2, nBursts);
+ast_proc_comb_IG = nan(2*nSamples, nBursts);
 
 
 %% Filtrado de las señales de presión, ast y velocidades en banda de freuencia apta para el análisis direccional
@@ -273,9 +268,6 @@ if filter_flag
             ast_proc(:, iAST, :) = reshape(ast_filt, size(ast_corr,1), 1, []);
         end
         ast_proc_comb = wsa_bandpass_filter(ast_corr_comb, 2*sampling_rate, f_i, f_f);
-    else
-        ast_proc = [];
-        ast_proc_comb = [];
     end
 
 else
@@ -285,9 +277,6 @@ else
     if is_awac
         ast_proc = ast_corr;
         ast_proc_comb = ast_corr_comb;
-    else
-        ast_proc = [];
-        ast_proc_comb = [];
     end
 end
 
@@ -334,15 +323,7 @@ if IG_filter_flag
             ast_proc_IG(:, iAST, :) = reshape(ast_filt_IG, size(ast_corr,1), 1, []);
         end
         ast_proc_comb_IG = wsa_bandpass_filter(ast_corr_comb, 2*sampling_rate, f_i_IG, f_f_IG);
-    else
-        ast_proc_IG = [];
-        ast_proc_comb_IG = [];
     end
-else
-    pressure_proc_IG = [];
-    velocity_proc_IG = [];
-    ast_proc_IG = [];
-    ast_proc_comb_IG = [];
 end
 
 
@@ -373,73 +354,73 @@ write_nc_variable(ncfile, 'velocity_proc', velocity_proc, ...
      'units', 'm/s', ...
      'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
 
-if IG_filter_flag
-    write_nc_variable(ncfile, 'pressure_proc_IG', pressure_proc_IG, ...
-        {'sample', size(pressure_proc_IG,1), ...
-         'burst', size(pressure_proc_IG,2)}, ...
-         'units', 'dBar', ...
-         'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/303 Hz a 1/30 Hz');
 
-    write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
-        {'sample', size(velocity_proc_IG,1), ...
-         'enu_component', size(velocity_proc_IG,2), ...
-         'burst', size(velocity_proc_IG,3)}, ...
-         'units', 'm/s', ...
-         'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
-end
+write_nc_variable(ncfile, 'pressure_proc_IG', pressure_proc_IG, ...
+    {'sample', size(pressure_proc_IG,1), ...
+     'burst', size(pressure_proc_IG,2)}, ...
+     'units', 'dBar', ...
+     'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/303 Hz a 1/30 Hz');
 
-if is_awac
-    write_nc_variable(ncfile, 'burst_time_ast', burst_time_ast, ...
-        {'sample_ast', size(burst_time_ast,1), ...
-         'burst', size(burst_time_ast,2)}, ...
-         'units', 'seconds since 1970-01-01 00:00:00 UTC', ...
-         'description', 'Tiempo para señal AST combinada (doble frecuencia de muestreo).');
-    
-    write_nc_variable(ncfile, 'ast_proc', ast_proc, ...
-        {'sample', size(ast_proc,1), ...
-         'ast_sensor', size(ast_proc,2), ...
-         'burst', size(ast_proc,3)}, ...
-         'units', 'm', ...
-         'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
-    
-    write_nc_variable(ncfile, 'ast_proc_comb', ast_proc_comb, ...
-        {'sample_ast', size(ast_proc_comb,1), ...
-         'burst', size(ast_proc_comb,2)}, ...
-         'units', 'm', ...
-         'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz. Señal combinada a doble frecuencia de muestreo.');
-    
-    write_nc_variable(ncfile, 'ast_mean', ast_mean, ...
-        {'burst', nBursts}, ...
-         'units', 'm', ...
-         'description', 'AST promedio');
-    
-    write_nc_variable(ncfile, 'ast_bad_detects', ast_bad_detects, ...
-        {'ast_sensor', size(ast_bad_detects,1), ...
-         'burst', size(ast_bad_detects,2)}, ...
-         'units', 'count', ...
-         'description', 'Mediciones malas del AST.');
-    
-    write_nc_variable(ncfile, 'ast_bad_detects_percentage', ast_bad_detects_percentage, ...
-        {'ast_sensor', size(ast_bad_detects_percentage,1), ...
-         'burst', size(ast_bad_detects_percentage,2)}, ...
-         'units', 'percentage', ...
-         'description', 'Porcentaje de mediciones malas del AST.');
+write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
+    {'sample', size(velocity_proc_IG,1), ...
+     'enu_component', size(velocity_proc_IG,2), ...
+     'burst', size(velocity_proc_IG,3)}, ...
+     'units', 'm/s', ...
+     'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
 
-    if IG_filter_flag
-        write_nc_variable(ncfile, 'ast_proc_IG', ast_proc_IG, ...
-            {'sample', size(ast_proc_IG,1), ...
-             'ast_sensor', size(ast_proc_IG,2), ...
-             'burst', size(ast_proc_IG,3)}, ...
-             'units', 'm', ...
-             'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
-    
-        write_nc_variable(ncfile, 'ast_proc_comb_IG', ast_proc_comb_IG, ...
-            {'sample_ast', size(ast_proc_comb_IG,1), ...
-             'burst', size(ast_proc_comb_IG,2)}, ...
-             'units', 'm', ...
-             'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz. Señal combinada a doble frecuencia de muestreo.');
-    end
-end
+
+
+write_nc_variable(ncfile, 'burst_time_ast', burst_time_ast, ...
+    {'sample_ast', size(burst_time_ast,1), ...
+     'burst', size(burst_time_ast,2)}, ...
+     'units', 'seconds since 1970-01-01 00:00:00 UTC', ...
+     'description', 'Tiempo para señal AST combinada (doble frecuencia de muestreo).');
+
+write_nc_variable(ncfile, 'ast_proc', ast_proc, ...
+    {'sample', size(ast_proc,1), ...
+     'ast_sensor', size(ast_proc,2), ...
+     'burst', size(ast_proc,3)}, ...
+     'units', 'm', ...
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
+
+write_nc_variable(ncfile, 'ast_proc_comb', ast_proc_comb, ...
+    {'sample_ast', size(ast_proc_comb,1), ...
+     'burst', size(ast_proc_comb,2)}, ...
+     'units', 'm', ...
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz. Señal combinada a doble frecuencia de muestreo.');
+
+write_nc_variable(ncfile, 'ast_mean', ast_mean, ...
+    {'burst', nBursts}, ...
+     'units', 'm', ...
+     'description', 'AST promedio');
+
+write_nc_variable(ncfile, 'ast_bad_detects', ast_bad_detects, ...
+    {'ast_sensor', size(ast_bad_detects,1), ...
+     'burst', size(ast_bad_detects,2)}, ...
+     'units', 'count', ...
+     'description', 'Mediciones malas del AST.');
+
+write_nc_variable(ncfile, 'ast_bad_detects_percentage', ast_bad_detects_percentage, ...
+    {'ast_sensor', size(ast_bad_detects_percentage,1), ...
+     'burst', size(ast_bad_detects_percentage,2)}, ...
+     'units', 'percentage', ...
+     'description', 'Porcentaje de mediciones malas del AST.');
+
+
+write_nc_variable(ncfile, 'ast_proc_IG', ast_proc_IG, ...
+    {'sample', size(ast_proc_IG,1), ...
+     'ast_sensor', size(ast_proc_IG,2), ...
+     'burst', size(ast_proc_IG,3)}, ...
+     'units', 'm', ...
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
+
+write_nc_variable(ncfile, 'ast_proc_comb_IG', ast_proc_comb_IG, ...
+    {'sample_ast', size(ast_proc_comb_IG,1), ...
+     'burst', size(ast_proc_comb_IG,2)}, ...
+     'units', 'm', ...
+     'description', 'AST procesado con despiking, corrección por aceleración gravitacional y filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz. Señal combinada a doble frecuencia de muestreo.');
+
+
 
 
 %% Atributos del procesamiento
@@ -472,30 +453,16 @@ info.velocity_enu.raw = velocity_enu;
 info.velocity_enu.proc = velocity_proc;
 info.velocity_enu.proc_IG = velocity_proc_IG;
 
-if is_awac
-    info.ast.available = true;
-    info.ast.raw = ast;
-    info.ast.corr = ast_corr;
-    info.ast.proc = ast_proc;
-    info.ast.proc_comb = ast_proc_comb;
-    info.ast.proc_IG = ast_proc_IG;
-    info.ast.proc_comb_IG = ast_proc_comb_IG;
-    info.ast.mean = ast_mean;
-    info.ast.ast_bad_detects = ast_bad_detects;
-    info.ast.ast_bad_detects_percentage = ast_bad_detects_percentage;
-else
-
-    info.ast.available = false;
-    info.ast.raw = [];
-    info.ast.corr = [];
-    info.ast.proc = [];
-    info.ast.proc_comb = [];
-    info.ast.proc_IG = [];
-    info.ast.proc_comb_IG = [];
-    info.ast.mean = [];
-    info.ast.ast_bad_detects = [];
-    info.ast.ast_bad_detects_percentage = [];
-end
+info.ast.available = is_awac;
+info.ast.raw = ast;
+info.ast.corr = ast_corr;
+info.ast.proc = ast_proc;
+info.ast.proc_comb = ast_proc_comb;
+info.ast.proc_IG = ast_proc_IG;
+info.ast.proc_comb_IG = ast_proc_comb_IG;
+info.ast.mean = ast_mean;
+info.ast.ast_bad_detects = ast_bad_detects;
+info.ast.ast_bad_detects_percentage = ast_bad_detects_percentage;
 
 info.transformation_matrix = transformation_matrix;
 info.heading = heading;
@@ -544,43 +511,93 @@ end
 %% Funciones auxiliares específicas de la función
 
 function write_nc_variable(ncfile, varname, data, dimensions, varargin)
-%write_nc_variable - Crea o sobrescribe una variable en un NetCDF.
-%
-% Uso:
-%   write_nc_variable(..., 'units', 'm/s')
-%   write_nc_variable(..., 'units', 'm', 'long_name', 'Surface elevation')
 
-info = ncinfo(ncfile);
-existing_vars = {info.Variables.Name};
+FILL_DOUBLE = double(9.969209968386869e36);
+DEFLATE_LEVEL = 4;
+SHUFFLE_FLAG = true;
 
-if ~ismember(varname, existing_vars)
-    % Crear variable con atributos
-    wsa_nc_create_var(ncfile, varname, dimensions, 'double', varargin{:});
+file_info = ncinfo(ncfile);
+existing_vars = {file_info.Variables.Name};
+
+is_new_variable = ~ismember(varname,existing_vars);
+
+if is_new_variable
+
+    chunk_size = infer_chunk_size(dimensions);
+
+    wsa_nc_create_var( ...
+        ncfile, ...
+        varname, ...
+        dimensions, ...
+        'double', ...
+        'FillValue', FILL_DOUBLE, ...
+        'DeflateLevel', DEFLATE_LEVEL, ...
+        'Shuffle', SHUFFLE_FLAG, ...
+        'ChunkSize', chunk_size, ...
+        varargin{:});
+
 else
-    % Si ya existe, actualizar atributos si se pasaron
+
+    % Actualizar atributos normales.
     for k = 1:2:numel(varargin)
-        attname = varargin{k};
-        attval  = varargin{k+1};
-        ncwriteatt(ncfile, varname, attname, attval);
+        ncwriteatt( ...
+            ncfile, ...
+            varname, ...
+            varargin{k}, ...
+            varargin{k+1});
     end
 end
 
-% Escribir datos
-ncwrite(ncfile, varname, data);
+data = double(data);
+
+data_available = any(isfinite(data(:)));
+
+ncwriteatt( ...
+    ncfile, ...
+    varname, ...
+    'data_available', ...
+    double(data_available));
+
+if ~data_available && is_new_variable
+    % La variable queda sin escribir y netCDF devuelve _FillValue.
+    return
+end
+
+% Este caso también limpia una variable existente cuando se vuelve
+% a ejecutar preprocess con una opción desactivada.
+data(~isfinite(data)) = FILL_DOUBLE;
+
+ncwrite(ncfile,varname,data);
 
 end
 
-function value = read_att_safe( ...
-    ncfile, location, attribute_name, default_value)
 
+
+function chunk_size = infer_chunk_size(dimensions)
+
+dim_lengths = cell2mat(dimensions(2:2:end));
+
+chunk_size = dim_lengths;
+
+% Primera dimensión normalmente corresponde a sample.
+if ~isempty(chunk_size)
+    chunk_size(1) = min(chunk_size(1),1024);
+end
+
+% Última dimensión normalmente corresponde a burst.
+if numel(chunk_size) >= 2
+    chunk_size(end) = 1;
+end
+
+end
+
+function value = read_att_safe(ncfile, location, attribute_name, default_value)
 try
-    value = ncreadatt( ...
-        ncfile, ...
-        location, ...
-        attribute_name);
+    value = ncreadatt(ncfile, location, attribute_name);
 catch
     value = default_value;
 end
-
 end
+
+
 
