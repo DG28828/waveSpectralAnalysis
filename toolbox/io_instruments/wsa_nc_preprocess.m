@@ -38,7 +38,6 @@ end
 
 % Identificar instrumento
 instrument_type = upper(string(read_att_safe(ncfile, '/', 'instrument_type', "")));
-
 if ~ismember(instrument_type, ["AWAC", "AQUADOPP"])
     error(['El atributo global instrument_type no existe o no contiene ' ...
            'un instrumento compatible. Valor encontrado: "%s".'], ...
@@ -49,6 +48,10 @@ is_aquadopp = instrument_type == "AQUADOPP";
 
 fprintf('\nInstrumento: %s.\n', instrument_type);
 
+% Identificar sistema de coordenadas
+coordinate_system = upper(string(read_att_safe(ncfile, '/', 'coordinate_system', "")));
+
+fprintf('\nSistema de coordenadas configurado: %s.\n', coordinate_system);
 
 %% Verificar variables requeridas
 
@@ -79,7 +82,7 @@ nSamples = size(pressure, 1);
 nBursts  = size(pressure, 2);
 
 if size(velocity_beams, 1) ~= nSamples || size(velocity_beams, 3) ~= nBursts
-    error('Las dimensiones de pressure y vesampling_rate_Hzlocity_beams no son consistentes.');
+    error('Las dimensiones de pressure y velocity_beams no son consistentes.');
 end
 
 ast = double(ncread(ncfile, 'ast'));
@@ -182,19 +185,39 @@ end
 %% Transformación de las velocidades beam a enu
 
 velocity_enu = nan(size(velocity_beams));
-for b = 1:nBursts
-    % Extraer datos del burst
-    U_beam = velocity_beams(:, 1, b);
-    V_beam = velocity_beams(:, 2, b);
-    Z_beam = velocity_beams(:, 3, b);
 
-    %Preprocesamiento de las velocidades
-    beam = [U_beam V_beam Z_beam]';
-    vel_out = wsa_velocity_transformation(beam, transformation_matrix, heading(b), pitch(b), roll(b));
-    velocity_enu(:, 1, b) = vel_out.enu(1, :);
-    velocity_enu(:, 2, b) = vel_out.enu(2, :);
-    velocity_enu(:, 3, b) = vel_out.enu(3, :);
+if strlength(coordinate_system) > 0
+    if is_aquadopp && coordinate_system == "BEAM" || is_awac
+        for b = 1:nBursts
+            % Extraer datos del burst
+            U_beam = velocity_beams(:, 1, b);
+            V_beam = velocity_beams(:, 2, b);
+            Z_beam = velocity_beams(:, 3, b);
+        
+            %Preprocesamiento de las velocidades
+            beam = [U_beam V_beam Z_beam]';
+            vel_out = wsa_velocity_transformation(beam, transformation_matrix, heading(b), pitch(b), roll(b));
+            velocity_enu(:, 1, b) = vel_out.enu(1, :);
+            velocity_enu(:, 2, b) = vel_out.enu(2, :);
+            velocity_enu(:, 3, b) = vel_out.enu(3, :);
+        end
+    elseif coordinate_system == "XYZ"
+        error('Transformación desde XYZ no soportado en esta versión.')
+    elseif is_aquadopp && coordinate_system == "ENU"
+        for b = 1:nBursts
+            velocity_enu(:, 1, b) = velocity_beams(:, 1, b);
+            velocity_enu(:, 2, b) = velocity_beams(:, 2, b);
+            velocity_enu(:, 3, b) = velocity_beams(:, 3, b);
+        end 
+        fprintf('\nTransformación de coordenadas de velocidades omitida: el instrumento se configuró en ENU.\n');
+    else
+        error('Sistema de coordenadas indicado no corresponde a una opción valida.')
+    end
+else
+    warning('No se indica el sistema de coordenadas configurado, se omite la transformación de velocidades')
 end
+
+
 
 %% Detrend de presión y velocidades
 
