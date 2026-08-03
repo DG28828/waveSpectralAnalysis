@@ -7,7 +7,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 30/07/2026
+% Fecha de modificación: 03/08/2026
 % -------------------------------------------------------------------------
 %% Manejo de entradas
 
@@ -91,11 +91,23 @@ if size(ast,1) ~= nSamples || size(ast,2) ~= 2 || size(ast,3) ~= nBursts
     error('La variable ast debe tener dimensiones sample × 2 × burst.');
 end
 
-%% Información de muestreo
+%% Información adicional
 
 sampling_rate = double(read_att_safe(ncfile, '/', 'sampling_rate_Hz', NaN));
 
 number_of_samples_att = double(read_att_safe(ncfile, '/', 'number_of_samples', NaN));
+
+mounting_height = double(read_att_safe(ncfile, '/', 'mounting_height_m', NaN));
+blanking_distance = double(read_att_safe(ncfile, '/', 'blanking_distance_m', NaN));
+
+if is_awac
+    cell_position = ncread(ncfile, 'cell_position');
+elseif is_aquadopp
+    cell_size = 0.75; %m
+    fixed_cell_position = blanking_distance + 1.5*cell_size;
+    cell_position = fixed_cell_position*ones(nBursts, 1);
+end
+
 
 if ~isfinite(sampling_rate) || sampling_rate <= 0
     error('El archivo no contiene una frecuencia de muestreo válida.');
@@ -217,6 +229,29 @@ else
     warning('No se indica el sistema de coordenadas configurado, se omite la transformación de velocidades')
 end
 
+%% Calcular presión media
+pressure_mean = mean(pressure, 1, 'omitnan').';
+
+%% Calcular variables adicionales: profunidad y posición del instrumento
+
+if is_awac
+    z_p = -ast_mean;                %pressure_sensor_z
+    h = ast_mean + mounting_height; %water_depth
+    z_v = cell_position - ast_mean; %velocity_sensor_z
+
+elseif is_aquadopp
+    g = 9.81;   %m's^2
+    rho = 1025; %kg/m^3
+    pressure_mean_Pa = 10000*pressure_mean;     % dBa -> Pa    %1dBa = 10kPa (Primero se pasa a unidades SI)
+    pressure_mean_m = pressure_mean_Pa./(rho*g);  % Pa -> m de columna de agua
+
+    z_p = -pressure_mean_m;                             %pressure_sensor_z
+    h = pressure_mean_m + mounting_height;              %water_depth
+    z_v = cell_position - pressure_mean_m;              %velocity_sensor_z
+
+else
+    error('Instrumento no válido')
+end
 
 
 %% Detrend de presión y velocidades
@@ -357,6 +392,21 @@ write_nc_variable(ncfile, 'burst_time', burst_time, ...
      'burst', size(burst_time,2)}, ...
      'units', 'seconds since 1970-01-01 00:00:00 UTC');
 
+write_nc_variable(ncfile, 'h', h, ...
+    {'burst', nBursts}, ...
+     'units', 'm', ...
+     'description', 'Profundidad del lecho marino');
+
+write_nc_variable(ncfile, 'z_p', z_p, ...
+    {'burst', nBursts}, ...
+     'units', 'm', ...
+     'description', 'Ubicación del sensor de presión desde el nivel medio');
+
+write_nc_variable(ncfile, 'z_v', z_v, ...
+    {'burst', nBursts}, ...
+     'units', 'm', ...
+     'description', 'Ubicación de las mediciones de velocidades orbitales desde el nivel medio');
+
 write_nc_variable(ncfile, 'pressure_proc', pressure_proc, ...
     {'sample', size(pressure_proc,1), ...
      'burst', size(pressure_proc,2)}, ...
@@ -391,6 +441,10 @@ write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
      'units', 'm/s', ...
      'description', 'Velocidades orbitales en sistema de coordenadas ENU. enu_components: 1-East, 2-North, 3-Up. Procesada mediante filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
 
+write_nc_variable(ncfile, 'pressure_mean', pressure_mean, ...
+    {'burst', nBursts}, ...
+    'units', 'dbar', ...
+    'description', 'Presión media.');
 
 
 write_nc_variable(ncfile, 'burst_time_ast', burst_time_ast, ...
