@@ -12,14 +12,15 @@ function [f_band, X_band] = wsa_extract_band(f, X, limits)
 %       f_band  : vector de frecuencias de la banda.
 %       X_band  : valores de X dentro de la banda.
 
-    %% Preparar entradas
+    %% Verificaciones iniciales
 
     f = f(:);
 
-    fmin = limits(1);
-    fmax = limits(2);
+    fmin_req = limits(1);
+    fmax_req = limits(2);
 
-    %% Verificaciones iniciales
+    fmin = fmin_req;
+    fmax = fmax_req;  
 
     if numel(limits) ~= 2 || ~isnumeric(limits)
         error('limits debe ser un vector numérico [fmin, fmax].');
@@ -33,9 +34,43 @@ function [f_band, X_band] = wsa_extract_band(f, X, limits)
         error('El vector f debe ser estrictamente creciente.');
     end
 
-    if fmin < f(1) || fmax > f(end)
-        error('La banda [%.6g, %.6g] Hz está fuera del intervalo disponible [%.6g, %.6g] Hz.', fmin, fmax, f(1), f(end));
+    %% Ajustar límites 
+
+    % Espaciamiento en los extremos de la malla.
+    df_lower = f(2) - f(1);
+    df_upper = f(end) - f(end - 1);
+
+    % Tolerancia para errores de punto flotante.
+    tolerance = 100*eps(max(1, max(abs(f))));
+
+    % Ajustar el límite inferior cuando queda como máximo un bin fuera.
+    if fmin < f(1)
+
+        lower_difference = f(1) - fmin;
+
+        if lower_difference <= df_lower + tolerance
+            fmin = f(1);
+        else
+            error('El límite inferior %.9g Hz está fuera del intervalo disponible [%.9g, %.9g] Hz.', fmin_requested, f(1), f(end));
+        end
     end
+
+    % Ajustar el límite superior cuando queda como máximo un bin fuera.
+    if fmax > f(end)
+
+        upper_difference = fmax - f(end);
+
+        if upper_difference <= df_upper + tolerance
+            fmax = f(end);
+        else
+            error('El límite superior %.9g Hz está fuera del intervalo disponible [%.9g, %.9g] Hz.', fmax_requested, f(1), f(end));
+        end
+    end
+
+    if fmin >= fmax
+        error('Después de ajustar los límites al intervalo disponible, la banda resultante no es válida: [%.9g, %.9g] Hz.', fmin, fmax);
+    end
+
 
     %% Frecuencias interiores
 
