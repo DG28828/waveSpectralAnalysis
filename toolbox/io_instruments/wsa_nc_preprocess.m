@@ -237,7 +237,7 @@ pressure_mean = mean(pressure, 1, 'omitnan').';
 if is_awac
     z_p = -ast_mean;                %pressure_sensor_z
     h = ast_mean + mounting_height; %water_depth
-    z_v = cell_position - ast_mean; %velocity_sensor_z
+    z_v = cell_position' - ast_mean; %velocity_sensor_z
 
 elseif is_aquadopp
     g = 9.81;   %m's^2
