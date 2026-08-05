@@ -1,29 +1,23 @@
 function wsa_nc_write(data, ncfile, varargin)
 %wsa_nc_write - exporta datos de instrumentos a formato netCDF.
 %
-%   Esta función exporta una estructura de datos AWAC a un archivo netCDF.
+%   Esta función exporta una estructura de datos AWAC | AQUADOPP | RBR a 
+%   un archivo netCDF.
+%
 %   La estructura de entrada puede corresponder a datos crudos importados
-%   mediante wsa_awac_read o a datos previamente limpiados mediante
-%   wsa_awac_clean.
-%
-%   La función escribe en el archivo netCDF las variables principales de
-%   los archivos .whd y .wad, incluyendo orientación del instrumento, 
-%   presión, AST, velocidades orbitales, amplitudes, matriz de 
-%   transformación y flags de control de calidad.
-%
-%   Además, se agregan atributos globales con información de la campaña,
-%   sitio, instrumento, estado de limpieza y configuración básica de
-%   muestreo.
+%   mediante wsa_awac_read, wsa_aquadopp_read, wsa_rbr_read o a datos 
+%   previamente limpiados mediante wsa_awac_clean, wsa_aquadopp_clean o 
+%   wsa_rbr_clean.
 %
 %
 %   Sintaxis:
-%       wsa_awac_nc_write(data, ncfile)
+%       wsa_nc_write(data, ncfile)
 %
-%       wsa_awac_nc_write(data, ncfile, ...
+%       wsa_nc_write(data, ncfile, ...
 %                       'site_name', site_name, ...
 %                       'campaign_name', campaign_name)
 %
-%       wsa_awac_nc_write(data, ncfile, ...
+%       wsa_nc_write(data, ncfile, ...
 %                       'site_name', site_name, ...
 %                       'campaign_name', campaign_name, ...
 %                       'mounting_height', mounting_height, ...
@@ -31,7 +25,7 @@ function wsa_nc_write(data, ncfile, varargin)
 %
 %
 %   Argumentos de entrada (requeridos):
-%       data    - Estructura de datos AWAC.
+%       data    - Estructura de datos AWAC | AQUADOPP | RBR.
 %                   Estructura generada por wsa_awac_read o
 %                   wsa_awac_clean.
 %
@@ -66,87 +60,13 @@ function wsa_nc_write(data, ncfile, varargin)
 %       guarda directamente en el archivo especificado por ncfile.
 %
 %
-%   Variables principales escritas en netCDF:
-%
-%       Variables dependientes de burst:
-%           time
-%           burst_counter
-%           n_wave_records
-%           cell_position
-%           battery_voltage
-%           sound_speed
-%           heading
-%           pitch
-%           roll
-%           min_pressure
-%           max_pressure
-%           temperature
-%           cell_size
-%           ast_window_start
-%           ast_window_size
-%           ast_window_offset
-%
-%       Variables dependientes de sample y burst:
-%           pressure
-%           ast
-%           ast_quality
-%           analog_input
-%           velocity_beams
-%           amplitude
-%
-%       Variables auxiliares:
-%           noise_amp_beams
-%           transformation_matrix
-%
-%       Variables de control de calidad:
-%           samples_flag
-%           size_flag
-%           orientation_flag
-%           pressure_flag
-%           pressure_sample_flag
-%           is_bad_burst
-%           bad_tilt_flag
-%           warning_tilt_flag
-%
-%
-%   Notas:
-%   • La función verifica que el struct de entrada contenga los campos whd
-%     y wad.
-%
-%   • La cantidad de bursts en whd y wad debe coincidir.
-%
-%   • Si el archivo netCDF ya existe y overwrite = true, el archivo
-%     existente se elimina antes de crear el nuevo archivo.
-%
-%   • Si el directorio de salida no existe, se crea automáticamente.
-%
-%   • El tiempo de cada burst se almacena como segundos POSIX:
-%
-%         seconds since 1970-01-01 00:00:00 UTC
-%
-%   • Si la estructura de entrada contiene información de limpieza, los
-%     atributos globales time_start, time_end, cleaning_type y
-%     Number_of_wave_measurements se toman de data.cleaning.
-%
-%   • Si la estructura de entrada no contiene información de limpieza, los
-%     atributos globales anteriores se toman de data.quality.summary y
-%     data.hdr.general.
-%
-%   • El atributo preprocessing_status se inicializa como false, ya que
-%     esta función únicamente escribe datos crudos o limpios, pero no datos
-%     preprocesados.
-%
-%   • El archivo resultante conserva las series temporales originales de
-%     presión, AST y velocidades en coordenadas de beams. La transformación
-%     a coordenadas ENU debe realizarse en una etapa posterior de
-%     preprocesamiento.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 30/07/2026
+% Fecha de modificación: 05/08/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -197,14 +117,23 @@ fprintf('\nEscribir datos de instrumento a formato netCDF.\n');
 % Detectar el tipo de instrumento
 is_awac = isfield(data, 'whd') && isfield(data, 'wad');
 is_aquadopp = isfield(data, 'dia_info') && isfield(data, 'dia');
-if is_awac && is_aquadopp
-    error('El struct contiene simultáneamente campos AWAC y AQUADOPP. No es posible determinar el instrumento.');
+is_rbr = isfield(data, 'rbr_info') && isfield(data, 'rbr');
+
+instrument_flags = [is_awac, is_aquadopp, is_rbr];
+
+if nnz(instrument_flags) > 1
+    error('El struct contiene simultáneamente 2 o mas campos de AWAC, AQUADOPP y RBR. No es posible determinar el instrumento.');
+
 elseif is_awac
     instrument_type = "AWAC";
+
 elseif is_aquadopp
     instrument_type = "AQUADOPP";
+
+elseif is_rbr
+    instrument_type = "RBR";
 else
-    error('No fue posible identificar el instrumento. Se esperaba:\n  AWAC: data.whd y data.wad\n  AQUADOPP: data.dia_info y data.dia');
+    error('No fue posible identificar el instrumento. Se esperaba:\n  AWAC: data.whd y data.wad\n  AQUADOPP: data.dia_info y data.dia\n   RBR: data.rbr_info y data.rbr');
 end
 
 % Crear nombres comunes para procesamiento
@@ -221,26 +150,24 @@ switch instrument_type
         burst_data = data.dia;
         nSamples = data.hdr.setup.Diagnostics_Number_of_samples;
         sampling_rate_Hz = data.hdr.setup.Diagnostics_Sampling_rate_Hz;
+
+    case "RBR"
+        burst_info = data.rbr_info;
+        burst_data = data.rbr;
+        nSamples = data.hdr.setup.Wave_Number_of_samples;
+        sampling_rate_Hz = data.hdr.setup.Wave_Sampling_rate_Hz;    
+
 end
 
 % Cantidad de bursts
 nBurst = numel(burst_info);
 if numel(burst_data) ~= nBurst
-    error('La cantidad de registros de información (%d) y series de ráfaga (%d) no coincide.', nBurst, numel(burst_data));
+    error('La cantidad de registros de información (%d) y bursts (%d) no coincide.', nBurst, numel(burst_data));
 end
 
-%Verificar que whd no este vacio
+%Verificar nBurst no sea cero
 if nBurst == 0
     error('La estructura de datos reporta cero bursts.');
-end
-
-% AWAC: Verificar que whd y wad tenga la misma cantidad de bursts
-if strcmp(instrument_type, "AWAC")
-    nBurstData = numel(burst_data);
-    if nBurstData ~= nBurst
-        error('whd (%d) y wad (%d) no tienen la misma cantidad de bursts.', ...
-            nBurst, nBurstData);
-    end
 end
 
 %Verificar existencia de archivo y sobreescritura
@@ -253,16 +180,11 @@ if isfile(ncfile)
     try
         delete(ncfile);
     catch ME
-        error(['No fue posible eliminar el archivo NetCDF existente:\n%s\n' ...
-               'Puede estar abierto, bloqueado o no tener permisos de escritura.\n' ...
-               'Mensaje original: %s'], ...
-               ncfile, ME.message);
+        error('No fue posible eliminar el archivo NetCDF existente:\n%s\nPuede estar abierto, bloqueado o no tener permisos de escritura.\nMensaje original: %s', ncfile, ME.message);
     end
 
     if isfile(ncfile)
-        error(['El archivo NetCDF continúa existiendo después de intentar ' ...
-               'eliminarlo:\n%s\nCierre cualquier programa que lo esté utilizando.'], ...
-               ncfile);
+        error('El archivo NetCDF continúa existiendo después de intentar eliminarlo:\n%s\nCierre cualquier programa que lo esté utilizando.', ncfile);
     end
 end
 
@@ -342,6 +264,9 @@ warning_tilt_flag_20    = nan(nQC,1);
 
 %---------------          Datos de archivo .hdr          --------------- 
 transformation_matrix = data.hdr.head_configuration.Transformation_matrix;
+if isempty(transformation_matrix)
+    transformation_matrix = nan(naxis, nVelBeams);
+end
 
 %Extraer datos de burst y muestras por burst
 
@@ -368,7 +293,7 @@ for i = 1:nBurst
                 double(tmp_counter(1));
         end
     end
-    battery_voltage_V(i) = get_scalar_field(bi, 'battery_voltage_V');
+    battery_voltage_V(i)  = get_scalar_field(bi, 'battery_voltage_V');
     sound_speed_ms(i)     = get_scalar_field(bi, 'sound_speed_ms');
     heading_deg(i)        = get_scalar_field(bi, 'heading_deg');
     pitch_deg(i)          = get_scalar_field(bi, 'pitch_deg');
@@ -399,6 +324,9 @@ for i = 1:nBurst
     tmp = wsa_get_struct_field(bd, 'pressure_dbar');
     if ~isempty(tmp)
         tmp = double(tmp(:));
+        if numel(tmp) > nSamples
+            error('El burst %d contiene %d muestras de presión, pero la dimensión admite solamente %d.', i, numel(tmp), nSamples);
+        end
         nr = min(nSamples,numel(tmp));
         pressure_dbar(1:nr,i) = tmp(1:nr);
     end
@@ -441,44 +369,50 @@ for i = 1:nBurst
     end
 
     % Entradas analógicas
-    if instrument_type == "AWAC"
+    switch instrument_type
+        case "AWAC"
+    
+            tmp = wsa_get_struct_field( bd, 'analog_input');
+            if ~isempty(tmp)
+                tmp = double(tmp(:));
+                nr = min(nSamples,numel(tmp));
+    
+                analog_input(1:nr,1,i) = tmp(1:nr);
+            end
+    
+        case "AQUADOPP"
+            tmp1 = wsa_get_struct_field(bd, 'analog1');
+            tmp2 = wsa_get_struct_field(bd, 'analog2');
+            if ~isempty(tmp1)
+                tmp1 = double(tmp1(:));
+                nr = min(nSamples,numel(tmp1));
+                analog_input(1:nr,1,i) = tmp1(1:nr);
+            end
+            if ~isempty(tmp2)
+                tmp2 = double(tmp2(:));
+                nr = min(nSamples,numel(tmp2));
+                analog_input(1:nr,2,i) = tmp2(1:nr);
+            end
+        case "RBR"
+            % No contiene este campo
+    end
 
-        tmp = wsa_get_struct_field( bd, 'analog_input');
+
+    % Códigos Aquadopp
+    if instrument_type == "AQUADOPP"
+        tmp = wsa_get_struct_field(bd, 'error_code');
         if ~isempty(tmp)
             tmp = double(tmp(:));
             nr = min(nSamples,numel(tmp));
-
-            analog_input(1:nr,1,i) = tmp(1:nr);
+            error_code(1:nr,i) = tmp(1:nr);
         end
-
-    else
-        tmp1 = wsa_get_struct_field(bd, 'analog1');
-        tmp2 = wsa_get_struct_field(bd, 'analog2');
-        if ~isempty(tmp1)
-            tmp1 = double(tmp1(:));
-            nr = min(nSamples,numel(tmp1));
-            analog_input(1:nr,1,i) = tmp1(1:nr);
+    
+        tmp = wsa_get_struct_field(bd, 'status_code');
+        if ~isempty(tmp)
+            tmp = double(tmp(:));
+            nr = min(nSamples,numel(tmp));
+            status_code(1:nr,i) = tmp(1:nr);
         end
-        if ~isempty(tmp2)
-            tmp2 = double(tmp2(:));
-            nr = min(nSamples,numel(tmp2));
-            analog_input(1:nr,2,i) = tmp2(1:nr);
-        end
-    end
-
-    % Códigos Aquadopp
-    tmp = wsa_get_struct_field(bd, 'error_code');
-    if ~isempty(tmp)
-        tmp = double(tmp(:));
-        nr = min(nSamples,numel(tmp));
-        error_code(1:nr,i) = tmp(1:nr);
-    end
-
-    tmp = wsa_get_struct_field(bd, 'status_code');
-    if ~isempty(tmp)
-        tmp = double(tmp(:));
-        nr = min(nSamples,numel(tmp));
-        status_code(1:nr,i) = tmp(1:nr);
     end
 end
 
@@ -541,7 +475,6 @@ end
 % Convertir para guardar como double 0/1
 is_bad_burst = double(is_bad_burst);
 
-
 %% Crear dimensiones y variables para netCDF
 % En esta sección se crean las variables para el archivo netCDF, donde se
 % especifican sus propiedades: nombre, dimensiones, tipo y atributos.
@@ -556,69 +489,74 @@ wsa_nc_create_var( ...
                   {'burst', nBurst}, ...                                    %dims
                   'double', ...                                             %datatype
                   'units', 'seconds since 1970-01-01 00:00:00 UTC', ...     %varargin1, value (unidad)
+                  'data_available', double(true), ...
                   'long_name', 'burst time' ...                             %varargin2, value (nombre largo)
                   );
 
 % Variables de whd: nombre, valor, tipo de dato, unidad, nombre largo
 vars1d_burst = {
-    'burst_counter',        burst_counter,      'double',   'count',      'burst_counter';              %whd
-    'n_wave_records',       n_wave_records,     'double',   'count',      'number_of_wave_records';     %whd
-    'cell_position',        cell_position_m,    'double',   'm',          'cell_position_m';            %whd
-    'battery_voltage',      battery_voltage_V,  'double',   'V',          'battery_voltage_V';          %whd
-    'sound_speed',          sound_speed_ms,     'double',   'm/s',        'sound_speed_ms';             %whd
-    'heading',              heading_deg,        'double',   'degree',     'heading_deg';                %whd
-    'pitch',                pitch_deg,          'double',   'degree',     'pitch_deg';                  %whd
-    'roll',                 roll_deg,           'double',   'degree',     'roll_deg';                   %whd
-    'tilt',                 tilt_deg,           'double',   'degree',     'tilt_deg';                   %whd
-    'min_pressure',         min_pressure_dbar,  'double',   'dbar',       'min_pressure_dbar';          %whd
-    'max_pressure',         max_pressure_dbar,  'double',   'dbar',       'max_pressure_dbar';          %whd
-    'temperature',          temperature_degC,   'double',   'degree_C',   'temperature_degC';           %whd
-    'cell_size',            cell_size_m,        'double',   'm',          'cell_size_m';                %whd
-    'ast_window_start',     ast_window_start_m, 'double',   'm',          'ast_window_start_m';         %whd
-    'ast_window_size',      ast_window_size_m,  'double',   'm',          'ast_window_size_m';          %whd
-    'ast_window_offset',    ast_window_offset_m,'double',   'm',          'ast_window_offset_m';        %whd
+    'burst_counter',        burst_counter,      'double',   'count',      'burst_counter',              has_finite_data(burst_counter);              
+    'n_wave_records',       n_wave_records,     'double',   'count',      'number_of_wave_records',     has_finite_data(n_wave_records);     
+    'cell_position',        cell_position_m,    'double',   'm',          'cell_position_m',            has_finite_data(cell_position_m);            
+    'battery_voltage',      battery_voltage_V,  'double',   'V',          'battery_voltage_V',          has_finite_data(battery_voltage_V);          
+    'sound_speed',          sound_speed_ms,     'double',   'm/s',        'sound_speed_ms',             has_finite_data(sound_speed_ms);             
+    'heading',              heading_deg,        'double',   'degree',     'heading_deg',                has_finite_data(heading_deg);                
+    'pitch',                pitch_deg,          'double',   'degree',     'pitch_deg',                  has_finite_data(pitch_deg);                  
+    'roll',                 roll_deg,           'double',   'degree',     'roll_deg',                   has_finite_data(roll_deg);                   
+    'tilt',                 tilt_deg,           'double',   'degree',     'tilt_deg',                   has_finite_data(tilt_deg);                  
+    'min_pressure',         min_pressure_dbar,  'double',   'dbar',       'min_pressure_dbar',          has_finite_data(min_pressure_dbar);        
+    'max_pressure',         max_pressure_dbar,  'double',   'dbar',       'max_pressure_dbar',          has_finite_data(max_pressure_dbar);          
+    'temperature',          temperature_degC,   'double',   'degree_C',   'temperature_degC',           has_finite_data(temperature_degC);           
+    'cell_size',            cell_size_m,        'double',   'm',          'cell_size_m',                has_finite_data(cell_size_m);                
+    'ast_window_start',     ast_window_start_m, 'double',   'm',          'ast_window_start_m',         has_finite_data(ast_window_start_m);         
+    'ast_window_size',      ast_window_size_m,  'double',   'm',          'ast_window_size_m',          has_finite_data(ast_window_size_m);          
+    'ast_window_offset',    ast_window_offset_m,'double',   'm',          'ast_window_offset_m',        has_finite_data(ast_window_offset_m);        
     };
 for k = 1:size(vars1d_burst,1)
     name  = vars1d_burst{k,1};
     dtype = vars1d_burst{k,3};
     units = vars1d_burst{k,4};
     long_name = vars1d_burst{k, 5};
+    available = vars1d_burst{k,6};
     wsa_nc_create_var( ...
                        ncfile, ...                  %ncfile
                        name, ...                    %varname
                        {'burst', nBurst}, ...       %dims
                        dtype, ...                   %datatype
                        'units', units, ...          %varargin1, value (unidad)
-                       'long_name', long_name ...        %varargin2, value (nombre_largo)
-                        );
+                       'data_available', double(available), ... varargin2, value (data_available)
+                       'long_name', long_name, ...        %varargin3, value (nombre_largo)
+                       'FillValue', FILL_DOUBLE);
 end
 
 %-------     Variables dependientes de la dimensión {burst_raw}     -------
 vars1d_burst_raw = {
-    'samples_flag',         samples_flag,           'double',   'bool',       'samples_flag';
-    'size_flag',            size_flag,              'double',   'bool',       'size_flag';
-    'orientation_flag',     orientation_flag,       'double',   'bool',       'orientation_flag';
-    'pressure_flag',        pressure_flag,          'double',   'bool',       'pressure_flag';
-    'pressure_sample_flag', pressure_sample_flag,   'double',   'bool',       'pressure_sample_flag';
-    'is_bad_burst',         is_bad_burst,           'double',   'bool',       'is_bad_burst';
-    'bad_tilt_flag',        bad_tilt_flag,          'double',   'bool',       'bad_tilt_flag';
-    'warning_tilt_flag_5',    warning_tilt_flag_5,      'double',   'bool',       'warning_tilt_flag_5';
-    'warning_tilt_flag_10',    warning_tilt_flag_10,      'double',   'bool',       'warning_tilt_flag_10';
-    'warning_tilt_flag_20',    warning_tilt_flag_20,      'double',   'bool',       'warning_tilt_flag_20';
+    'samples_flag',         samples_flag,                 'double',   'bool',       'samples_flag',         has_finite_data(samples_flag);
+    'size_flag',            size_flag,                    'double',   'bool',       'size_flag',            has_finite_data(size_flag);
+    'orientation_flag',     orientation_flag,             'double',   'bool',       'orientation_flag',     has_finite_data(orientation_flag);
+    'pressure_flag',        pressure_flag,                'double',   'bool',       'pressure_flag',        has_finite_data(pressure_flag);
+    'pressure_sample_flag', pressure_sample_flag,         'double',   'bool',       'pressure_sample_flag', has_finite_data(pressure_sample_flag);
+    'is_bad_burst',         is_bad_burst,                 'double',   'bool',       'is_bad_burst',         has_finite_data(is_bad_burst);
+    'bad_tilt_flag',        bad_tilt_flag,                'double',   'bool',       'bad_tilt_flag',        has_finite_data(bad_tilt_flag);
+    'warning_tilt_flag_5',    warning_tilt_flag_5,        'double',   'bool',       'warning_tilt_flag_5',  has_finite_data(warning_tilt_flag_5);
+    'warning_tilt_flag_10',    warning_tilt_flag_10,      'double',   'bool',       'warning_tilt_flag_10', has_finite_data(warning_tilt_flag_10);
+    'warning_tilt_flag_20',    warning_tilt_flag_20,      'double',   'bool',       'warning_tilt_flag_20', has_finite_data(warning_tilt_flag_20);
     };
 for k = 1:size(vars1d_burst_raw,1)
     name  = vars1d_burst_raw{k,1};
     dtype = vars1d_burst_raw{k,3};
     units = vars1d_burst_raw{k,4};
     long_name = vars1d_burst_raw{k, 5};
+    available = vars1d_burst_raw{k,6};
     wsa_nc_create_var( ...
                        ncfile, ...                  %ncfile
                        name, ...                    %varname
                        {'burst_raw', nQC}, ...       %dims
                        dtype, ...                   %datatype
                        'units', units, ...          %varargin1, value (unidad)
-                       'long_name', long_name ...        %varargin2, value (nombre_largo)
-                        );
+                       'data_available', double(available), ... varargin2, value (data_available)
+                       'long_name', long_name, ...        %varargin3, value (nombre_largo)
+                       'FillValue', FILL_DOUBLE);
 end
 
 
@@ -632,6 +570,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'dbar', ...
+                  'data_available', double(has_finite_data(pressure_dbar)), ...
                   'long_name', 'pressure (dbar)', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -646,6 +585,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'ast_sensor', nAstSensors, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm', ...
+                  'data_available', double(has_finite_data(ast_distance_m)), ...
                   'long_name', 'ast distance (m)', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -660,6 +600,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'vel_beam', nVelBeams, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'm/s', ...
+                  'data_available', double(has_finite_data(beam_velocity_ms)), ...
                   'long_name', 'orbital velocity along beam (m/s)', ...
                   'description', 'Axes: Beam 1, Beam 2, Beam 3', ...
                   'FillValue', FILL_DOUBLE, ...
@@ -675,6 +616,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'vel_beam', nVelBeams, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'count', ...
+                  'data_available', double(has_finite_data(amplitude)), ...
                   'long_name', 'signal amplitude (counts)', ...
                   'description', 'Axes: (Beam 1), (Beam 2), (Beam 3)', ...
                   'FillValue', FILL_DOUBLE, ...
@@ -690,6 +632,7 @@ wsa_nc_create_var( ...
                   {'beam', nBeams, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'count', ...
+                  'data_available', double(has_finite_data(noise_amp_beams)), ...
                   'long_name', 'noise amplitude (counts)', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -704,6 +647,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'burst', nBurst}, ...
                   'double', ...
                   'units', '1', ...
+                  'data_available', double(has_finite_data(ast_quality)), ...
                   'long_name', 'ast quality', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -718,6 +662,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'analog_channel', nAnalog_channels, 'burst', nBurst}, ...
                   'double', ...
                   'units', 'count', ...
+                  'data_available', double(has_finite_data(analog_input)), ...
                   'long_name', 'analog input', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -727,13 +672,14 @@ wsa_nc_create_var( ...
 
 %Transformation matrix(axis, beam)
 wsa_nc_create_var( ...
-                  ncfile, ...
-                  'transformation_matrix', ...
-                  {'axis', naxis, 'vel_beam', nVelBeams}, ...
-                  'double', ...
-                  'units', '', ...
-                  'long_name', 'Transformation matrix for velocities' ...
-                  );
+                    ncfile, ...
+                    'transformation_matrix', ...
+                    {'axis', naxis, 'vel_beam', nVelBeams}, ...
+                    'double', ...
+                    'units', '', ...
+                    'data_available', double(has_finite_data(transformation_matrix)), ...
+                    'long_name', 'Transformation matrix for velocities', ...
+                    'FillValue', FILL_DOUBLE);
 
 wsa_nc_create_var( ...
                   ncfile, ...
@@ -741,6 +687,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'burst', nBurst}, ...
                   'double', ...
                   'units', '1', ...
+                  'data_available', double(has_finite_data(error_code)), ...
                   'long_name', 'instrument error code', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -754,6 +701,7 @@ wsa_nc_create_var( ...
                   {'sample', nSamples, 'burst', nBurst}, ...
                   'double', ...
                   'units', '1', ...
+                  'data_available', double(has_finite_data(status_code)), ...
                   'long_name', 'instrument status code', ...
                   'FillValue', FILL_DOUBLE, ...
                   'DeflateLevel', DEFLATE_LEVEL, ...
@@ -769,13 +717,13 @@ ncwrite(ncfile, 'time', time);
 for k = 1:size(vars1d_burst,1)
     name = vars1d_burst{k,1};
     val  = vars1d_burst{k,2};
-    ncwrite(ncfile, name, double(val));
+    write_numeric_with_fill(ncfile, name, val, FILL_DOUBLE);
 end
 
 for k = 1:size(vars1d_burst_raw,1)
     name = vars1d_burst_raw{k,1};
     val  = vars1d_burst_raw{k,2};
-    ncwrite(ncfile, name, double(val));
+    write_numeric_with_fill(ncfile, name, val, FILL_DOUBLE);
 end
 
 write_numeric_with_fill(ncfile, 'noise_amp_beams', noise_amp_beams, FILL_DOUBLE);
@@ -813,12 +761,19 @@ ncwriteatt(ncfile, '/', 'instrument_type', char(instrument_type));
 ncwriteatt(ncfile, '/', 'instrument_serial', char(data.hdr.hardware_configuration.Serial_number));
 ncwriteatt(ncfile, '/', 'head_serial', char(data.hdr.head_configuration.Serial_number));
 
-
-if ~isempty(mounting_height)
-    ncwriteatt(ncfile, '/', 'mounting_height_m', mounting_height);
+if isempty(mounting_height)
+    mounting_height_value = NaN;
+    mounting_height_available = false;
 else
-    ncwriteatt(ncfile, '/', 'mounting_height_m', 'not specified');
+    if ~isscalar(mounting_height) || ~isfinite(mounting_height)
+        error('mounting_height debe ser un escalar finito cuando se especifica.');
+    end
+    mounting_height_value = double(mounting_height);
+    mounting_height_available = true;
 end
+
+ncwriteatt(ncfile, '/', 'mounting_height_m', mounting_height_value);
+ncwriteatt(ncfile, '/', 'mounting_height_available', double(mounting_height_available));
 
 ncwriteatt(ncfile, '/', 'coordinate_system', char(data.hdr.setup.Coordinate_system));
 ncwriteatt(ncfile, '/', 'blanking_distance_m', double(data.hdr.setup.Blanking_distance_m));
@@ -865,7 +820,7 @@ if isfield(data, 'hdr')
 end
 
 switch instrument_type
-    case "AWAC"
+    case {"AWAC", "RBR"}
         burst_interval_s = wsa_get_struct_field(data.hdr.setup, 'Wave_Interval_s');
         burst_duration_s = wsa_get_struct_field(data.hdr.setup, 'Wave_burst_duration_s');
 
@@ -922,6 +877,16 @@ end
 data(~isfinite(data)) = fill_value;
 
 ncwrite(ncfile, varname, data);
+
+end
+
+function tf = has_finite_data(x)
+
+if isempty(x) || ~(isnumeric(x) || islogical(x))
+    tf = false;
+    return
+end
+tf = any(isfinite(x(:)));
 
 end
 
