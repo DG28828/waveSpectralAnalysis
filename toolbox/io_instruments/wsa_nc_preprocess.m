@@ -7,7 +7,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 03/08/2026
+% Fecha de modificación: 05/08/2026
 % -------------------------------------------------------------------------
 %% Manejo de entradas
 
@@ -38,13 +38,14 @@ end
 
 % Identificar instrumento
 instrument_type = upper(string(read_att_safe(ncfile, '/', 'instrument_type', "")));
-if ~ismember(instrument_type, ["AWAC", "AQUADOPP"])
+if ~ismember(instrument_type, ["AWAC", "AQUADOPP", "RBR"])
     error(['El atributo global instrument_type no existe o no contiene ' ...
            'un instrumento compatible. Valor encontrado: "%s".'], ...
            instrument_type);
 end
 is_awac = instrument_type == "AWAC";
 is_aquadopp = instrument_type == "AQUADOPP";
+is_rbr = instrument_type == "RBR";
 
 fprintf('\nInstrumento: %s.\n', instrument_type);
 
@@ -55,11 +56,46 @@ fprintf('\nSistema de coordenadas configurado: %s.\n', coordinate_system);
 
 %% Verificar variables requeridas
 
-% Variables comunes
-required_vars = {'time', 'pressure', 'ast', 'velocity_beams', 'transformation_matrix', 'heading', 'pitch', 'roll'};
-
+% Variables existentes
 nc_info = ncinfo(ncfile);
 nc_var_names = {nc_info.Variables.Name};
+
+% Variables requeridas
+required_vars = ["time", "pressure"];
+
+switch instrument_type
+    case "AWAC"
+        required_vars = [
+            required_vars
+            "ast"
+            "velocity_beams"
+            "transformation_matrix"
+            "heading"
+            "pitch"
+            "roll"
+            "cell_position"
+        ];
+
+    case "AQUADOPP"
+        required_vars = [
+            required_vars
+            "velocity_beams"
+        ];
+
+        % Estos campos solamente son requeridos cuando se debe transformar desde BEAM.
+        if coordinate_system == "BEAM"
+            required_vars = [
+                required_vars
+                "transformation_matrix"
+                "heading"
+                "pitch"
+                "roll"
+            ];
+        end
+
+    case "RBR"
+        % El RBR solamente requiere tiempo y presión.
+end
 
 missing_vars = required_vars(~ismember(required_vars, nc_var_names));
 
@@ -67,28 +103,82 @@ if ~isempty(missing_vars)
     error('El archivo no contiene todas las variables requeridas.\nInstrumento: %s\nVariables faltantes: %s', instrument_type, strjoin(missing_vars, ', '));
 end
 
+%% Leer atributos de disponibilidad de variables
+
+pressure_available          = nc_variable_available(ncfile, 'pressure', nc_var_names);
+ast_available               = nc_variable_available(ncfile, 'ast', nc_var_names);
+velocity_available          = nc_variable_available(ncfile, 'velocity_beams', nc_var_names);
+transformation_available    = nc_variable_available(ncfile, 'transformation_matrix', nc_var_names);
+heading_available           = nc_variable_available( ncfile, 'heading', nc_var_names);
+pitch_available             = nc_variable_available(ncfile, 'pitch', nc_var_names);
+roll_available              = nc_variable_available(ncfile, 'roll', nc_var_names);
+
+if is_rbr
+    ast_available = false;
+    velocity_available = false;
+    transformation_available = false;
+    heading_available = false;
+    pitch_available = false;
+    roll_available = false;
+end
+
+if ~pressure_available
+    error('La variable pressure existe, pero no contiene datos disponibles.');
+end
+
 %% Extraer datos requeridas
 
 time = ncread(ncfile, 'time');
-
 pressure = ncread(ncfile, 'pressure');
-velocity_beams = ncread(ncfile, 'velocity_beams');
-transformation_matrix = ncread(ncfile, 'transformation_matrix');
-heading = ncread(ncfile, 'heading');
-pitch = ncread(ncfile, 'pitch');
-roll = ncread(ncfile, 'roll');
 
 nSamples = size(pressure, 1);
 nBursts  = size(pressure, 2);
 
-if size(velocity_beams, 1) ~= nSamples || size(velocity_beams, 3) ~= nBursts
-    error('Las dimensiones de pressure y velocity_beams no son consistentes.');
+if numel(time) ~= nBursts
+    error('La variable time contiene %d valores, pero pressure contiene %d bursts.', numel(time), nBursts);
 end
 
-ast = double(ncread(ncfile, 'ast'));
-if size(ast,1) ~= nSamples || size(ast,2) ~= 2 || size(ast,3) ~= nBursts
+time = time(:);
 
-    error('La variable ast debe tener dimensiones sample × 2 × burst.');
+% Inicializar variables no comunes como no NaN, para que se rellenen con FillValue en caso de no leerse.
+velocity_beams = nan(nSamples, 3, nBursts);
+transformation_matrix = nan(3, 3);
+heading = nan(nBursts, 1);
+pitch = nan(nBursts, 1);
+roll = nan(nBursts, 1);
+ast = nan(nSamples, 2, nBursts);
+
+if velocity_available
+    velocity_beams = ncread(ncfile, 'velocity_beams');
+    if size(velocity_beams,1) ~= nSamples || size(velocity_beams,2) ~= 3 || size(velocity_beams,3) ~= nBursts
+        error('La variable velocity_beams debe tener dimensiones sample × 3 × burst.');
+    end
+end
+
+if transformation_available
+    transformation_matrix = ncread(ncfile, 'transformation_matrix');
+end
+
+if heading_available
+    heading = ncread(ncfile, 'heading');
+    heading = heading(:);
+end
+
+if pitch_available
+    pitch = ncread(ncfile, 'pitch');
+    pitch = pitch(:);
+end
+
+if roll_available
+    roll = ncread(ncfile, 'roll');
+    roll = roll(:);
+end
+
+if ast_available
+    ast = double(ncread(ncfile, 'ast'));
+    if size(ast,1) ~= nSamples || size(ast,2) ~= 2 || size(ast,3) ~= nBursts
+        error('La variable ast debe tener dimensiones sample × 2 × burst.');
+    end
 end
 
 %% Información adicional
@@ -100,12 +190,16 @@ number_of_samples_att = double(read_att_safe(ncfile, '/', 'number_of_samples', N
 mounting_height = double(read_att_safe(ncfile, '/', 'mounting_height_m', NaN));
 blanking_distance = double(read_att_safe(ncfile, '/', 'blanking_distance_m', NaN));
 
+cell_position = nan(nBursts, 1);
 if is_awac
     cell_position = ncread(ncfile, 'cell_position');
 elseif is_aquadopp
     cell_size = 0.75; %m
     fixed_cell_position = blanking_distance + 1.5*cell_size;
     cell_position = fixed_cell_position*ones(nBursts, 1);
+elseif is_rbr
+    %RBR no tiene celda de velocidad
+    cell_position(:) = NaN;
 end
 
 
@@ -122,13 +216,17 @@ end
 sample_offset_s = (0:nSamples-1)' / sampling_rate;
 burst_time = sample_offset_s + reshape(time, 1, []);
 
-ast_sampling_rate_Hz = 2*sampling_rate;
-sample_ast_offset_s = (0:2*nSamples-1)'/ast_sampling_rate_Hz;
-burst_time_ast = sample_ast_offset_s + reshape(time,1,[]);
+if ast_available
+    ast_sampling_rate_Hz = 2*sampling_rate;
+    sample_ast_offset_s = (0:2*nSamples-1)'/ast_sampling_rate_Hz;
+    burst_time_ast = sample_ast_offset_s + reshape(time,1,[]);
+else
+    burst_time_ast = nan(2*nSamples, nBursts);
+end
 
 %% Procesamiento de las señales AST
 
-if is_awac
+if ast_available
     %Señales individuales originales
     AST1 = squeeze(ast(:, 1, :));
     AST2 = squeeze(ast(:, 2, :));
@@ -190,13 +288,13 @@ else
     ast_bad_detects_percentage = nan(2, nBursts);
 
     if ast_corr_flag
-        fprintf('\nCorrección AST omitida: el AQUADOPP no dispone de mediciones AST.\n');
+        fprintf('\nCorrección AST omitida: el instrumento %s no dispone de mediciones AST.\n', instrument_type);
     end
 end
 
 %% Transformación de las velocidades beam a enu
 
-velocity_enu = nan(size(velocity_beams));
+velocity_enu = nan(nSamples, 3, nBursts);
 
 if strlength(coordinate_system) > 0
     if is_aquadopp && coordinate_system == "BEAM" || is_awac
@@ -674,6 +772,20 @@ try
 catch
     value = default_value;
 end
+end
+
+function tf = nc_variable_available(ncfile, varname, nc_var_names)
+%nc_variable_available - determina si una variable netCDF contiene datos.
+
+tf = false;
+
+if ~ismember(string(varname), nc_var_names)
+    return
+end
+
+att = ncreadatt(ncfile,varname, 'data_available');
+tf = logical(att);
+
 end
 
 
