@@ -91,53 +91,56 @@ function data = wsa_rbr_read(files_dir, varargin)
 %
 %   • No se almacena un vector datetime por muestra. Los tiempos de muestra
 %     pueden reconstruirse a partir del inicio del burst y la frecuencia de
-%     muestreo, reduciendo considerablemente el uso de memoria.
+%     muestreo.
 %
-%   • La columna Wave del archivo *_burst.txt se ignora deliberadamente,
-%     ya que corresponde a un producto derivado por Ruskin.
+%   • La columna Wave del archivo *_burst.txt se ignora ya que corresponde a un producto derivado por Ruskin.
 %
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/08/2026
-% Fecha de modificación: 03/08/2026
+% Fecha de modificación: 05/08/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
 
+%Input parser
 p = inputParser;
 p.FunctionName = mfilename;
 
-addRequired(p, 'files_dir', ...
-    @(x) ischar(x) || (isstring(x) && isscalar(x)));
+%%%%%% Parámetros requeridos %%%%%%
+addRequired(p, 'files_dir', @(x) ischar(x) || (isstring(x) && isscalar(x)));
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-addParameter(p, 'min_pressure_limit', 1, ...
-    @(x) isnumeric(x) && isscalar(x) && isfinite(x));
-
-addParameter(p, 'pressure_drop_limit', 5, ...
-    @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x >= 0);
-
-addParameter(p, 'bad_pressure_sample_percentage_limit', 5, ...
-    @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x >= 0 && x <= 100);
-
-addParameter(p, 'do_plot', false, ...
-    @(x) islogical(x) && isscalar(x));
-
-addParameter(p, 'save_plot_dir', [], ...
-    @(x) isempty(x) || ischar(x) || (isstring(x) && isscalar(x)));
+%%%%%% Parámetros opcionales %%%%%%
+addParameter(p, 'min_pressure_limit', 1, @(x) isnumeric(x) && isscalar(x) && isfinite(x));
+addParameter(p, 'pressure_drop_limit', 5, @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x >= 0);
+addParameter(p, 'bad_pressure_sample_percentage_limit', 5, @(x) isnumeric(x) && isscalar(x) && isfinite(x) && x >= 0 && x <= 100);
+addParameter(p, 'do_plot', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'save_plot_dir', [], @(x) isempty(x) || ischar(x) || (isstring(x) && isscalar(x)));
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 parse(p, files_dir, varargin{:});
 
+%%%%%%%    Resultados     %%%%%%%%
 files_dir = char(string(p.Results.files_dir));
 min_pressure_limit = double(p.Results.min_pressure_limit);
 pressure_drop_limit = double(p.Results.pressure_drop_limit);
-
-bad_pressure_sample_percentage_limit = ...
-    double(p.Results.bad_pressure_sample_percentage_limit);
-
+bad_pressure_sample_percentage_limit = double(p.Results.bad_pressure_sample_percentage_limit);
 do_plot = p.Results.do_plot;
 save_plot_dir = p.Results.save_plot_dir;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Verificaciones iniciales
+
+fprintf('\n\n========================================================================================================================\n');
+fprintf('=============================================          Lectura de RBR          =============================================\n');
+fprintf('\nLeer datos de presión de RBR.\n');
+
+if ~isfolder(files_dir)
+    error('La carpeta no existe: %s', files_dir);
+end
 
 if ~isempty(save_plot_dir)
     save_plot_dir = char(string(save_plot_dir));
@@ -148,18 +151,7 @@ if ~isempty(save_plot_dir)
     end
 end
 
-%% Verificaciones iniciales
-
-fprintf('\n\n========================================================================================================================\n');
-fprintf('=============================================          Lectura de RBR          =============================================\n');
-fprintf('\nLeer datos de presión exportados por Ruskin.\n');
-
-if ~isfolder(files_dir)
-    error('La carpeta no existe: %s', files_dir);
-end
-
-[file_burst, file_metadata, deployment_name] = ...
-    locate_rbr_files(files_dir);
+[file_burst, file_metadata, deployment_name] = locate_rbr_files(files_dir);
 
 fprintf('\nArchivo de bursts:\n%s\n', file_burst);
 fprintf('\nArchivo de metadatos:\n%s\n', file_metadata);
@@ -182,68 +174,45 @@ for k = 1:numel(required_metadata_blocks)
 
     field_name = required_metadata_blocks{k};
 
-    if ~isfield(metadata, field_name) || ...
-            ~isstruct(metadata.(field_name))
-
-        error('El archivo de metadatos no contiene el bloque requerido "%s".', ...
-            field_name);
+    if ~isfield(metadata, field_name) || ~isstruct(metadata.(field_name))
+        error('El archivo de metadatos no contiene el bloque requerido "%s".', field_name);
     end
 end
 
-sampling_period_ms = ...
-    get_numeric_field(metadata.sampling, 'period', NaN);
-
-expected_nSamples = ...
-    get_numeric_field(metadata.sampling, 'burstcount', NaN);
-
-burst_interval_ms = ...
-    get_numeric_field(metadata.sampling, 'burstinterval', NaN);
+sampling_period_ms = get_numeric_field(metadata.sampling, 'period', NaN);
+expected_nSamples = get_numeric_field(metadata.sampling, 'burstcount', NaN);
+burst_interval_ms = get_numeric_field(metadata.sampling, 'burstinterval', NaN);
 
 if ~isfinite(sampling_period_ms) || sampling_period_ms <= 0
     error('metadata.sampling.period no contiene un periodo de muestreo válido.');
 end
 
-if ~isfinite(expected_nSamples) || ...
-        expected_nSamples <= 0 || ...
-        expected_nSamples ~= fix(expected_nSamples)
-
-    error(['metadata.sampling.burstcount no contiene un número ' ...
-           'entero positivo de muestras.']);
+if ~isfinite(expected_nSamples) || expected_nSamples <= 0 || expected_nSamples ~= fix(expected_nSamples)
+    error('metadata.sampling.burstcount no contiene un número entero positivo de muestras.');
 end
 
 if ~isfinite(burst_interval_ms) || burst_interval_ms <= 0
-    error(['metadata.sampling.burstinterval no contiene un ' ...
-           'intervalo de burst válido.']);
+    error('metadata.sampling.burstinterval no contiene un intervalo de burst válido.');
 end
 
-sampling_interval_s = sampling_period_ms / 1000;
-sampling_rate_Hz = 1 / sampling_interval_s;
-burst_interval_s = burst_interval_ms / 1000;
-burst_duration_s = expected_nSamples / sampling_rate_Hz;
+sampling_interval_s = sampling_period_ms/1000;
+sampling_rate_Hz = 1/sampling_interval_s;
+burst_interval_s = burst_interval_ms/1000;
+burst_duration_s = expected_nSamples/sampling_rate_Hz;
 
-pressure_units = ...
-    find_channel_units(metadata, 'burstheader', 'Pressure');
+pressure_units = find_channel_units(metadata, 'burstheader', 'Pressure');
 
-if strlength(pressure_units) > 0 && ...
-        ~strcmpi(pressure_units, "dbar")
-
-    error(['La función espera presión exportada en dbar, pero los ' ...
-           'metadatos indican unidades "%s".'], pressure_units);
+if strlength(pressure_units) > 0 && ~strcmpi(pressure_units, "dbar")
+    error('La función espera presión exportada en dbar, pero los metadatos indican unidades "%s".', pressure_units);
 
 elseif strlength(pressure_units) == 0
-
-    warning(['No fue posible verificar las unidades de presión en los ' ...
-             'metadatos. La columna Pressure se interpretará como dbar.']);
-
+    warning('No fue posible verificar las unidades de presión en los metadatos. La columna Pressure se interpretará como dbar.');
     pressure_units = "dbar";
+
 end
 
-fprintf('\nInstrumento: %s\n', ...
-    char(string(get_field_default(metadata.instrument, 'model', ""))));
-
-fprintf('Número de serie: %s\n', ...
-    char(string(get_field_default(metadata.instrument, 'serial', ""))));
-
+fprintf('\nInstrumento: %s\n', char(string(get_field_default(metadata.instrument, 'model', ""))));
+fprintf('Número de serie: %s\n', char(string(get_field_default(metadata.instrument, 'serial', ""))));
 fprintf('Frecuencia de muestreo: %.6g Hz\n', sampling_rate_Hz);
 fprintf('Muestras esperadas por burst: %d\n', expected_nSamples);
 fprintf('Intervalo entre bursts: %.6g s\n', burst_interval_s);
@@ -294,21 +263,21 @@ end
 %% Organizar datos por burst y verificar muestreo
 
 empty_rbr = struct( ...
-    'burst_counter', [], ...
-    'pressure_dbar', [], ...
-    'nSamples', []);
+                    'burst_counter', [], ...
+                    'pressure_dbar', [], ...
+                    'nSamples', []);
 
 data.rbr = repmat(empty_rbr, nBursts, 1);
 
 empty_info = struct( ...
-    'burst_index', [], ...
-    'burst_counter', [], ...
-    'datetime', NaT, ...
-    'end_datetime', NaT, ...
-    'n_wave_records', [], ...
-    'mean_pressure_dbar', NaN, ...
-    'min_pressure_dbar', NaN, ...
-    'max_pressure_dbar', NaN);
+                    'burst_index', [], ...
+                    'burst_counter', [], ...
+                    'datetime', NaT, ...
+                    'end_datetime', NaT, ...
+                    'n_wave_records', [], ...
+                    'mean_pressure_dbar', NaN, ...
+                    'min_pressure_dbar', NaN, ...
+                    'max_pressure_dbar', NaN);
 
 data.rbr_info = repmat(empty_info, nBursts, 1);
 
@@ -317,8 +286,7 @@ actual_samples = zeros(nBursts, 1);
 time_interval_flag = false(nBursts, 1);
 bad_pressure_sample_percentage = NaN(nBursts, 1);
 
-sample_time_tolerance_s = ...
-    max(1e-6, sampling_interval_s * 1e-5);
+sample_time_tolerance_s = max(1e-6, sampling_interval_s * 1e-5);
 
 for b = 1:nBursts
 
@@ -336,18 +304,13 @@ for b = 1:nBursts
 
         dt_b = seconds(diff(time_b));
 
-        time_interval_flag(b) = ...
-            any(~isfinite(dt_b)) || ...
-            any(abs(dt_b - sampling_interval_s) > ...
-                sample_time_tolerance_s);
+        time_interval_flag(b) = any(~isfinite(dt_b)) || any(abs(dt_b - sampling_interval_s) > sample_time_tolerance_s);
 
     else
         time_interval_flag(b) = true;
     end
 
-    samples_flag(b) = ...
-        nSamples_b ~= expected_nSamples || ...
-        time_interval_flag(b);
+    samples_flag(b) = nSamples_b ~= expected_nSamples || time_interval_flag(b);
 
     data.rbr(b).burst_counter = burst_counter;
     data.rbr(b).pressure_dbar = pressure_b(:);
@@ -359,21 +322,15 @@ for b = 1:nBursts
     data.rbr_info(b).end_datetime = time_b(end);
     data.rbr_info(b).n_wave_records = nSamples_b;
 
-    data.rbr_info(b).mean_pressure_dbar = ...
-        mean(pressure_b, 'omitnan');
+    data.rbr_info(b).mean_pressure_dbar = mean(pressure_b, 'omitnan');
 
-    data.rbr_info(b).min_pressure_dbar = ...
-        min(pressure_b, [], 'omitnan');
+    data.rbr_info(b).min_pressure_dbar = min(pressure_b, [], 'omitnan');
 
-    data.rbr_info(b).max_pressure_dbar = ...
-        max(pressure_b, [], 'omitnan');
+    data.rbr_info(b).max_pressure_dbar = max(pressure_b, [], 'omitnan');
 
-    invalid_pressure_samples = ...
-        ~isfinite(pressure_b) | ...
-        pressure_b < min_pressure_limit;
+    invalid_pressure_samples = ~isfinite(pressure_b) | pressure_b < min_pressure_limit;
 
-    bad_pressure_sample_percentage(b) = ...
-        100 * sum(invalid_pressure_samples) / nSamples_b;
+    bad_pressure_sample_percentage(b) = 100*sum(invalid_pressure_samples)/nSamples_b;
 end
 
 burst_start_time = [data.rbr_info.datetime]';
@@ -386,23 +343,15 @@ clear time_all burst_counter_all pressure_all
 % Verificar intervalos entre inicios considerando el cambio del contador.
 if nBursts > 1
 
-    observed_start_interval_s = ...
-        seconds(diff(burst_start_time));
+    observed_start_interval_s = seconds(diff(burst_start_time));
 
-    expected_start_interval_s = ...
-        diff(burst_ids) * burst_interval_s;
+    expected_start_interval_s = diff(burst_ids) * burst_interval_s;
 
-    burst_time_mismatch = ...
-        abs(observed_start_interval_s - ...
-            expected_start_interval_s) > ...
-        max(1e-3, sampling_interval_s);
+    burst_time_mismatch = abs(observed_start_interval_s - expected_start_interval_s) > max(1e-3, sampling_interval_s);
 
     if any(burst_time_mismatch)
 
-        warning(['Se detectaron %d intervalos entre bursts que no ' ...
-                 'coinciden con el contador y el intervalo indicado ' ...
-                 'en los metadatos.'], ...
-                 sum(burst_time_mismatch));
+        warning('Se detectaron %d intervalos entre bursts que no coinciden con el contador y el intervalo indicado en los metadatos.', sum(burst_time_mismatch));
     end
 
 else
@@ -412,42 +361,39 @@ end
 fprintf('\nBursts detectados: %d\n', nBursts);
 fprintf('Registros de presión leídos: %d\n', nRows);
 
-fprintf(['Bursts con número de muestras o intervalo temporal ' ...
-         'irregular: %d\n'], ...
-         sum(samples_flag));
+fprintf('Bursts con número de muestras o intervalo temporal irregular: %d\n', sum(samples_flag));
 
 %% Verificación de presión
 
 fprintf('\n----------------------------          Verificación de presión          ----------------------------\n');
-
 fprintf('\nLímites establecidos:\n');
 fprintf('\t-Presión mínima: %.4g dbar\n', min_pressure_limit);
+fprintf('\t-Diferencia respecto a la mediana: %.4g dbar\n', pressure_drop_limit);
+fprintf('\t-Porcentaje máximo de muestras inválidas o bajas: %.4g %%\n', bad_pressure_sample_percentage_limit);
 
-fprintf('\t-Diferencia respecto a la mediana: %.4g dbar\n', ...
-    pressure_drop_limit);
-
-fprintf(['\t-Porcentaje máximo de muestras inválidas o ' ...
-         'bajas: %.4g %%\n'], ...
-         bad_pressure_sample_percentage_limit);
+% Se realiza una verificación de la presión siguiendo los siguientes
+% criterios:
+%
+%   1) Presión media del burst
+%       Se verifica la presión media del burst y se compara con una presión
+%       mínima y límites +-mediana. Se marca el burst si la presión mínima
+%       supera alguno de los criterios.
+%
+%   2) Porcentaje de samples de presión por debajo de umbral
+%       Se verifica, para cada burst, la cantidad de samples que se
+%       encuentran debajo del umbral establecido. Se elimina el burst si la
+%       cantidad de samples de baja presión superan un porcentaje deseado.
 
 mean_pressure = [data.rbr_info.mean_pressure_dbar]';
 median_pressure = median(mean_pressure, 'omitnan');
 
-pressure_flag = ...
-    ~isfinite(mean_pressure) | ...
-    mean_pressure < min_pressure_limit | ...
-    abs(mean_pressure - median_pressure) > pressure_drop_limit;
+pressure_flag = ~isfinite(mean_pressure) | mean_pressure < min_pressure_limit | abs(mean_pressure - median_pressure) > pressure_drop_limit;
 
-pressure_sample_flag = ...
-    bad_pressure_sample_percentage > ...
-    bad_pressure_sample_percentage_limit;
+pressure_sample_flag = bad_pressure_sample_percentage > bad_pressure_sample_percentage_limit;
 
-fprintf('\nBursts con presión media problemática: %d\n', ...
-    sum(pressure_flag));
+fprintf('\nBursts con presión media problemática: %d\n', sum(pressure_flag));
 
-fprintf(['Bursts con porcentaje excesivo de muestras inválidas ' ...
-         'o bajas: %d\n'], ...
-         sum(pressure_sample_flag));
+fprintf('Bursts con porcentaje excesivo de muestras inválidas o bajas: %d\n', sum(pressure_sample_flag));
 
 %% Guardar metadatos seleccionados
 
@@ -675,41 +621,28 @@ data.quality.flags = ...
     repmat(empty_flags, nBursts, 1);
 
 for b = 1:nBursts
+    data.quality.flags(b).samples_flag = samples_flag(b);
 
-    data.quality.flags(b).samples_flag = ...
-        samples_flag(b);
-
-    data.quality.flags(b).pressure_flag = ...
-        pressure_flag(b);
-
-    data.quality.flags(b).pressure_sample_flag = ...
-        pressure_sample_flag(b);
+    data.quality.flags(b).pressure_flag = pressure_flag(b);
+    
+    data.quality.flags(b).pressure_sample_flag = pressure_sample_flag(b);
 end
 
-bad_bursts = ...
-    samples_flag | ...
-    pressure_flag | ...
-    pressure_sample_flag;
+bad_bursts = samples_flag | pressure_flag | pressure_sample_flag;
 
 qc_summary = struct();
 
 qc_summary.total_bursts = nBursts;
 
-qc_summary.samples_flag_count = ...
-    sum(samples_flag);
-
-qc_summary.pressure_flag_count = ...
-    sum(pressure_flag);
-
-qc_summary.pressure_sample_flag_count = ...
-    sum(pressure_sample_flag);
+qc_summary.samples_flag_count = sum(samples_flag);
+qc_summary.pressure_flag_count = sum(pressure_flag);
+qc_summary.pressure_sample_flag_count = sum(pressure_sample_flag);
 
 qc_summary.bad_bursts = bad_bursts;
 qc_summary.total_bad_bursts = sum(bad_bursts);
 qc_summary.total_good_bursts = sum(~bad_bursts);
 
-qc_summary.percentage_bad = ...
-    100 * sum(bad_bursts) / nBursts;
+qc_summary.percentage_bad = 100*sum(bad_bursts)/nBursts;
 
 qc_summary.bad_indices = find(bad_bursts);
 qc_summary.good_indices = find(~bad_bursts);
@@ -720,22 +653,16 @@ qc_summary.time_end = burst_end_time(end);
 qc_summary.actual_samples = actual_samples;
 qc_summary.expected_samples = expected_nSamples;
 
-qc_summary.time_interval_flag = ...
-    time_interval_flag;
+qc_summary.time_interval_flag = time_interval_flag;
 
-qc_summary.bad_pressure_sample_percentage = ...
-    bad_pressure_sample_percentage;
+qc_summary.bad_pressure_sample_percentage = bad_pressure_sample_percentage;
 
-qc_summary.median_pressure_dbar = ...
-    median_pressure;
+qc_summary.median_pressure_dbar = median_pressure;
 
-qc_summary.burst_time_mismatch_count = ...
-    sum(burst_time_mismatch);
+qc_summary.burst_time_mismatch_count = sum(burst_time_mismatch);
 
 if any(bad_bursts)
-
-    qc_summary.bad_datetimes = ...
-        burst_start_time(bad_bursts);
+    qc_summary.bad_datetimes = burst_start_time(bad_bursts);
 
 else
     qc_summary.bad_datetimes = datetime.empty(0,1);
@@ -780,17 +707,14 @@ end
 
 %% Funciones locales
 
-function [file_burst, file_metadata, deployment_name] = ...
-    locate_rbr_files(files_dir)
+function [file_burst, file_metadata, deployment_name] = locate_rbr_files(files_dir)
 
 files_txt = dir(fullfile(files_dir, '*.txt'));
 file_names = string({files_txt.name});
 
-burst_match = ...
-    endsWith(lower(file_names), "_burst.txt");
+burst_match = endsWith(lower(file_names), "_burst.txt");
 
-metadata_match = ...
-    endsWith(lower(file_names), "_metadata.txt");
+metadata_match = endsWith(lower(file_names), "_metadata.txt");
 
 burst_files = files_txt(burst_match);
 metadata_files = files_txt(metadata_match);
@@ -849,8 +773,7 @@ file_metadata = ...
 end
 
 
-function [time, burst_counter, pressure] = ...
-    read_rbr_burst_file(filename)
+function [time, burst_counter, pressure] = read_rbr_burst_file(filename)
 
 fid = fopen(filename, 'r');
 
@@ -914,10 +837,7 @@ pressure = double(values{3});
 end
 
 
-function value = get_field_default( ...
-    s, ...
-    field_name, ...
-    default_value)
+function value = get_field_default(s, field_name, default_value)
 
 if isstruct(s) && isfield(s, field_name)
 
@@ -934,13 +854,9 @@ end
 end
 
 
-function value = get_numeric_field( ...
-    s, ...
-    field_name, ...
-    default_value)
+function value = get_numeric_field(s, field_name, default_value)
 
-raw_value = ...
-    get_field_default(s, field_name, default_value);
+raw_value = get_field_default(s, field_name, default_value);
 
 if isnumeric(raw_value) || islogical(raw_value)
 
@@ -962,10 +878,7 @@ end
 end
 
 
-function units = find_channel_units( ...
-    metadata, ...
-    header_field, ...
-    channel_name)
+function units = find_channel_units(metadata, header_field, channel_name)
 
 units = "";
 
@@ -983,16 +896,10 @@ for k = 1:numel(header)
         item = header(k);
     end
 
-    if isstruct(item) && ...
-            isfield(item, 'name') && ...
-            strcmpi(string(item.name), string(channel_name))
-
-        if isfield(item, 'units') && ...
-                ~isempty(item.units)
-
+    if isstruct(item) && isfield(item, 'name') && strcmpi(string(item.name), string(channel_name))
+        if isfield(item, 'units') && ~isempty(item.units)
             units = string(item.units);
         end
-
         return
     end
 end
@@ -1000,10 +907,7 @@ end
 end
 
 
-function calibration = find_channel_calibration( ...
-    metadata, ...
-    header_field, ...
-    channel_name)
+function calibration = find_channel_calibration(metadata, header_field, channel_name)
 
 calibration = struct();
 
@@ -1021,13 +925,8 @@ for k = 1:numel(header)
         item = header(k);
     end
 
-    if isstruct(item) && ...
-            isfield(item, 'name') && ...
-            strcmpi(string(item.name), string(channel_name))
-
-        if isfield(item, 'calibration') && ...
-                isstruct(item.calibration)
-
+    if isstruct(item) && isfield(item, 'name') && strcmpi(string(item.name), string(channel_name))
+        if isfield(item, 'calibration') && isstruct(item.calibration)
             calibration = item.calibration;
         end
 
@@ -1051,10 +950,7 @@ end
 
 try
 
-    value = datetime( ...
-        raw_value, ...
-        'InputFormat', ...
-        'yyyy-MM-dd HH:mm:ss.SSS');
+    value = datetime(raw_value, 'InputFormat', 'yyyy-MM-dd HH:mm:ss.SSS');
 
 catch
     value = NaT;
@@ -1078,112 +974,51 @@ burst_index = (1:numel(mean_pressure))';
 
 %% Presión media
 
-f1 = figure( ...
-    'Name', ...
-    'Verificación de presión RBR', ...
-    'Color', ...
-    'w');
+f1 = figure('Name', 'Verificación de presión', 'Color', 'w');
 
 f1.Position = [1, 1, 1900, 1000];
 
 hold on
 
-plot( ...
-    burst_index, ...
-    mean_pressure, ...
-    '-', ...
-    'DisplayName', ...
-    'Presión media', ...
-    'LineWidth', ...
-    1.2);
+plot(burst_index, mean_pressure, '-', 'DisplayName', 'Presión media', 'LineWidth', 1.5);
 
-yline( ...
-    min_pressure_limit, ...
-    '--', ...
-    'DisplayName', ...
-    'Presión mínima');
-
-yline( ...
-    median_pressure, ...
-    '-', ...
-    'DisplayName', ...
-    'Mediana');
-
-yline( ...
-    median_pressure + pressure_drop_limit, ...
-    ':', ...
-    'DisplayName', ...
-    'Mediana + límite');
-
-yline( ...
-    median_pressure - pressure_drop_limit, ...
-    ':', ...
-    'DisplayName', ...
-    'Mediana - límite');
+yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima');
+yline(median_pressure, '-', 'DisplayName', 'Mediana');
+yline(median_pressure + pressure_drop_limit, ':', 'DisplayName', 'Mediana + límite');
+yline(median_pressure - pressure_drop_limit, ':','DisplayName', 'Mediana - límite');
 
 if any(pressure_flag)
-
-    scatter( ...
-        burst_index(pressure_flag), ...
-        mean_pressure(pressure_flag), ...
-        35, ...
-        'r', ...
-        'filled', ...
-        'DisplayName', ...
-        'Burst marcado');
+    scatter(burst_index(pressure_flag), mean_pressure(pressure_flag), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
 end
 
 hold off
 
 title('Verificación de presión media por burst');
 xlabel('Burst');
-ylabel('Presión absoluta (dbar)');
+ylabel('Presión media (dbar)');
 legend('Location', 'best');
 grid on
 box on
 
 %% Porcentaje de muestras problemáticas
 
-f2 = figure( ...
-    'Name', ...
-    'Verificación de muestras de presión RBR', ...
-    'Color', ...
-    'w');
+f2 = figure('Name', 'Verificación de muestras de presión', 'Color', 'w');
 
 f2.Position = [1, 1, 1900, 1000];
 
 hold on
 
-plot( ...
-    burst_index, ...
-    bad_pressure_sample_percentage, ...
-    '-', ...
-    'DisplayName', ...
-    'Muestras inválidas o bajas', ...
-    'LineWidth', ...
-    1.2);
+plot(burst_index, bad_pressure_sample_percentage, '-', 'DisplayName', 'Porcentaje superior al límite', 'LineWidth', 1.5);
 
-yline( ...
-    bad_pressure_sample_percentage_limit, ...
-    '--', ...
-    'DisplayName', ...
-    'Porcentaje máximo');
+yline(bad_pressure_sample_percentage_limit, '--', 'DisplayName', 'Porcentaje máximo');
 
 if any(pressure_sample_flag)
-
-    scatter( ...
-        burst_index(pressure_sample_flag), ...
-        bad_pressure_sample_percentage(pressure_sample_flag), ...
-        35, ...
-        'r', ...
-        'filled', ...
-        'DisplayName', ...
-        'Burst marcado');
+    scatter(burst_index(pressure_sample_flag), bad_pressure_sample_percentage(pressure_sample_flag), 40, 'r', 'filled', 'DisplayName', 'Burst marcado');
 end
 
 hold off
 
-title('Verificación de muestras de presión por burst');
+title(['Verificación de muestras de presión: ' 'porcentaje superior límite']);
 xlabel('Burst');
 ylabel('Porcentaje (%)');
 legend('Location', 'best');
@@ -1198,7 +1033,7 @@ if ~isempty(save_plot_dir)
         f1, ...
         fullfile( ...
             save_plot_dir, ...
-            'rbr_verificacion_presion.png'), ...
+            'verificacion_presion.png'), ...
         'Resolution', ...
         300);
 
@@ -1206,7 +1041,7 @@ if ~isempty(save_plot_dir)
         f2, ...
         fullfile( ...
             save_plot_dir, ...
-            'rbr_verificacion_presion_muestras.png'), ...
+            'verificacion_presion_muestras.png'), ...
         'Resolution', ...
         300);
 end
