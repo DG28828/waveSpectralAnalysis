@@ -61,7 +61,7 @@ nc_info = ncinfo(ncfile);
 nc_var_names = {nc_info.Variables.Name};
 
 % Variables requeridas
-required_vars = ["time", "pressure"];
+required_vars = ["time"; "pressure"];
 
 switch instrument_type
     case "AWAC"
