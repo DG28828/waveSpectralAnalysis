@@ -217,6 +217,10 @@ atmospheric_pressure_dbar = double(read_att_safe(ncfile, '/', 'atmospheric_press
 rbr_density = double(read_att_safe(ncfile, '/', 'ruskin_density', NaN));
 pressure_reference = lower(string(read_att_safe(ncfile, '/', 'pressure_reference', "")));
 
+if is_rbr && isempty(mounting_height)
+    warning('La campaña RBR no tiene mounting_height. La presión podrá preprocesarse, pero no será posible calcular h ni aplicar posteriormente la corrección espectral por presión.');
+end
+
 %% Estandarizar presión a presión manométrica
 
 % Conservar la referencia original.
