@@ -66,7 +66,7 @@ function wsa_nc_write(data, ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 05/08/2026
+% Fecha de modificación: 06/08/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -760,6 +760,21 @@ end
 ncwriteatt(ncfile, '/', 'instrument_type', char(instrument_type));
 ncwriteatt(ncfile, '/', 'instrument_serial', char(data.hdr.hardware_configuration.Serial_number));
 ncwriteatt(ncfile, '/', 'head_serial', char(data.hdr.head_configuration.Serial_number));
+
+if instrument_type == "RBR"
+    hardware = data.hdr.hardware_configuration;
+    setup = data.hdr.setup;
+    ncwriteatt(ncfile, '/', 'instrument_model', char(string(hardware.Model)));
+    ncwriteatt(ncfile, '/', 'firmware_type', double(hardware.Firmware_type));
+    ncwriteatt(ncfile, '/', 'firmware_version',double(hardware.Firmware_version));
+    ncwriteatt(ncfile, '/', 'ruskin_version', char(string(hardware.Ruskin_version)));
+    ncwriteatt(ncfile, '/', 'pressure_units', char(string(setup.Pressure_units)));
+    ncwriteatt(ncfile, '/', 'pressure_reference', 'absolute');
+    ncwriteatt(ncfile, '/', 'time_offset_from_UTC_hours', double(setup.Time_offset_from_UTC_hours));
+    ncwriteatt(ncfile, '/', 'atmospheric_pressure_dbar', double(setup.Atmospheric_pressure_dbar));
+    ncwriteatt(ncfile, '/', 'ruskin_density', double(setup.Density));
+    ncwriteatt(ncfile, '/', 'ruskin_salinity', double(setup.Salinity));
+end
 
 if isempty(mounting_height)
     mounting_height_value = NaN;

@@ -7,7 +7,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 05/08/2026
+% Fecha de modificación: 06/08/2026
 % -------------------------------------------------------------------------
 %% Manejo de entradas
 
@@ -212,6 +212,113 @@ if isfinite(number_of_samples_att) && ...
     warning('El atributo number_of_samples indica %d muestras, pero la dimensión sample contiene %d. Se utilizará %d.', number_of_samples_att, nSamples, nSamples);
 end
 
+% Leer metadatos para RBR
+atmospheric_pressure_dbar = double(read_att_safe(ncfile, '/', 'atmospheric_pressure_dbar', NaN));
+rbr_density = double(read_att_safe(ncfile, '/', 'ruskin_density', NaN));
+pressure_reference = lower(string(read_att_safe(ncfile, '/', 'pressure_reference', "")));
+
+%% Estandarizar presión a presión manométrica
+
+% Conservar la referencia original.
+pressure_reference_original = lower(string(read_att_safe(ncfile, '/', 'pressure_reference_original', pressure_reference)));
+
+pressure_atmospheric_correction_applied = false;
+pressure_atmospheric_correction_dbar = 0;
+
+if is_rbr
+
+    switch pressure_reference
+
+        case {"absolute", "abs"}
+
+            if ~isfinite(atmospheric_pressure_dbar)
+                error('La presión del RBR está indicada como absoluta, pero no se dispone de una presión atmosférica válida para convertirla a presión manométrica.');
+            end
+
+            % Conversión de presión absoluta a manométrica.
+            pressure = pressure - atmospheric_pressure_dbar;
+
+            pressure_reference = "manometric";
+
+            pressure_atmospheric_correction_applied = true;
+
+            pressure_atmospheric_correction_dbar = atmospheric_pressure_dbar;
+
+            fprintf('\nPresión RBR convertida de absoluta a manométrica utilizando %.6g dbar de presión atmosférica.\n', atmospheric_pressure_dbar);
+
+        case {"gauge", "manometric", "manometrica"}
+
+            % La presión ya se encuentra en la referencia estándar.
+            pressure_reference = "manometric";
+
+            fprintf('\nLa presión del RBR ya se encuentra indicada como manométrica. No se aplicó corrección.\n');
+
+        otherwise
+            error('No fue posible interpretar la referencia de presión del RBR. Valor encontrado: "%s".', pressure_reference);
+    end
+
+else
+
+    % Se asume que AWAC y AQUADOPP entregan presión manométrica.
+    pressure_reference_original = "manometric";
+    pressure_reference = "manometric";
+end
+
+% Sobreescribir presión
+write_nc_variable( ...
+    ncfile, ...
+    'pressure', ...
+    pressure, ...
+    {'sample', nSamples, 'burst', nBursts}, ...
+    'units', 'dbar', ...
+    'long_name', 'manometric pressure', ...
+    'pressure_reference', 'manometric', ...
+    'description', 'Presión. Para RBR: la presión absoluta es convertida a presión manométrica restando la presión atmosférica guardada en los metadatos.');
+
+
+% Conversión de presión mínima y máxima
+if is_rbr
+
+    nc_var_names_string = string(nc_var_names);
+
+    if ismember("min_pressure", nc_var_names_string)
+
+        min_pressure = double(ncread(ncfile, 'min_pressure'));
+
+        if pressure_atmospheric_correction_applied
+            min_pressure = min_pressure - atmospheric_pressure_dbar;
+        end
+
+        write_nc_variable( ...
+            ncfile, ...
+            'min_pressure', ...
+            min_pressure, ...
+            {'burst', nBursts}, ...
+            'units', 'dbar', ...
+            'long_name', 'minimum manometric pressure', ...
+            'pressure_reference', 'manometric');
+    end
+
+    if ismember("max_pressure", nc_var_names_string)
+
+        max_pressure = double(ncread(ncfile, 'max_pressure'));
+
+        if pressure_atmospheric_correction_applied
+            max_pressure = max_pressure - atmospheric_pressure_dbar;
+        end
+
+        write_nc_variable( ...
+            ncfile, ...
+            'max_pressure', ...
+            max_pressure, ...
+            {'burst', nBursts}, ...
+            'units', 'dbar', ...
+            'long_name', 'maximum manometric pressure', ...
+            'pressure_reference', 'manometric');
+    end
+end
+
+
 %% Crear vectores de tiempo
 sample_offset_s = (0:nSamples-1)' / sampling_rate;
 burst_time = sample_offset_s + reshape(time, 1, []);
@@ -224,7 +331,7 @@ else
     burst_time_ast = nan(2*nSamples, nBursts);
 end
 
-%% Procesamiento de las señales AST
+%% Procesamiento de las señales AST en caso de estar disponible
 
 if ast_available
     %Señales individuales originales
@@ -296,59 +403,110 @@ end
 
 velocity_enu = nan(nSamples, 3, nBursts);
 
-if strlength(coordinate_system) > 0
-    if is_aquadopp && coordinate_system == "BEAM" || is_awac
-        for b = 1:nBursts
-            % Extraer datos del burst
-            U_beam = velocity_beams(:, 1, b);
-            V_beam = velocity_beams(:, 2, b);
-            Z_beam = velocity_beams(:, 3, b);
-        
-            %Preprocesamiento de las velocidades
-            beam = [U_beam V_beam Z_beam]';
-            vel_out = wsa_velocity_transformation(beam, transformation_matrix, heading(b), pitch(b), roll(b));
-            velocity_enu(:, 1, b) = vel_out.enu(1, :);
-            velocity_enu(:, 2, b) = vel_out.enu(2, :);
-            velocity_enu(:, 3, b) = vel_out.enu(3, :);
-        end
-    elseif coordinate_system == "XYZ"
-        error('Transformación desde XYZ no soportado en esta versión.')
-    elseif is_aquadopp && coordinate_system == "ENU"
-        for b = 1:nBursts
-            velocity_enu(:, 1, b) = velocity_beams(:, 1, b);
-            velocity_enu(:, 2, b) = velocity_beams(:, 2, b);
-            velocity_enu(:, 3, b) = velocity_beams(:, 3, b);
-        end 
-        fprintf('\nTransformación de coordenadas de velocidades omitida: el instrumento se configuró en ENU.\n');
-    else
-        error('Sistema de coordenadas indicado no corresponde a una opción valida.')
-    end
+if ~velocity_available
+    fprintf('\nTransformación de velocidades omitida: el instrumento %s no dispone de mediciones de velocidades orbitales.\n', instrument_type);
+
 else
-    warning('No se indica el sistema de coordenadas configurado, se omite la transformación de velocidades')
+    switch coordinate_system
+        case "BEAM"
+            if ~transformation_available || ~heading_available || ~pitch_available || ~roll_available
+                error('No es posible transformar velocidades desde BEAM porque faltan la matriz de transformación o los datos de orientación.');
+            end
+
+            for b = 1:nBursts
+                beam = [velocity_beams(:, 1, b) velocity_beams(:, 2, b) velocity_beams(:, 3, b)]';
+                vel_out = wsa_velocity_transformation(beam, transformation_matrix, heading(b), pitch(b), roll(b));
+                velocity_enu(:, 1, b) = vel_out.enu(1, :);
+                velocity_enu(:, 2, b) = vel_out.enu(2, :);
+                velocity_enu(:, 3, b) = vel_out.enu(3, :);
+            end
+        
+        case "ENU"
+            if is_awac
+                if ~transformation_available || ~heading_available || ~pitch_available || ~roll_available
+                    error('No es posible transformar velocidades desde BEAM porque faltan la matriz de transformación o los datos de orientación.');
+                end
+                for b = 1:nBursts
+                    beam = [velocity_beams(:, 1, b) velocity_beams(:, 2, b) velocity_beams(:, 3, b)]';
+                    vel_out = wsa_velocity_transformation(beam, transformation_matrix, heading(b), pitch(b), roll(b));
+                    velocity_enu(:, 1, b) = vel_out.enu(1, :);
+                    velocity_enu(:, 2, b) = vel_out.enu(2, :);
+                    velocity_enu(:, 3, b) = vel_out.enu(3, :);
+                end
+            else
+                velocity_enu = velocity_beams;
+                fprintf('\nTransformación de coordenadas de velocidades omitida: el instrumento se configuró en ENU.\n');
+            end
+        case  "XYZ"
+            error('Transformación desde XYZ no soportado en esta versión.')
+
+        otherwise
+            error('Sistema de coordenadas indicado no corresponde a una opción valida.')
+    end
 end
 
 %% Calcular presión media
 pressure_mean = mean(pressure, 1, 'omitnan').';
 
-%% Calcular variables adicionales: profunidad y posición del instrumento
+%% Calcular variables adicionales: profunidad y posición de sensores del instrumento
 
-if is_awac
-    z_p = -ast_mean;                %pressure_sensor_z
-    h = ast_mean + mounting_height; %water_depth
-    z_v = cell_position' - ast_mean; %velocity_sensor_z
+% Inicializar variables
+z_p = nan(nBursts,1);       %pressure_sensor_z
+h = nan(nBursts,1);         %water_depth
+z_v = nan(nBursts,1);       %velocity_sensor_z
 
-elseif is_aquadopp
-    g = 9.81;   %m's^2
-    rho = 1025; %kg/m^3
-    pressure_mean_Pa = 10000*pressure_mean;     % dBa -> Pa    %1dBa = 10kPa (Primero se pasa a unidades SI)
-    pressure_mean_m = pressure_mean_Pa./(rho*g);  % Pa -> m de columna de agua
+switch instrument_type
 
-    z_p = -pressure_mean_m;                             %pressure_sensor_z
-    h = pressure_mean_m + mounting_height;              %water_depth
-    z_v = cell_position - pressure_mean_m;              %velocity_sensor_z
+    case "AWAC"
+        z_p = -ast_mean(:);                %pressure_sensor_z
+        h = ast_mean(:) + mounting_height; %water_depth
+        z_v = cell_position(:) - ast_mean(:); %velocity_sensor_z
 
-else
-    error('Instrumento no válido')
+    case "AQUADOPP"
+        g = 9.81;   %m's^2
+        rho = 1025; %kg/m^3
+        pressure_mean_Pa = 10000*pressure_mean;     % dBa -> Pa    %1dBa = 10kPa (Primero se pasa a unidades SI)
+        pressure_mean_m = pressure_mean_Pa./(rho*g);  % Pa -> m de columna de agua
+    
+        z_p = -pressure_mean_m;                             %pressure_sensor_z
+        h = pressure_mean_m + mounting_height;              %water_depth
+        z_v = cell_position(:) - pressure_mean_m;              %velocity_sensor_z
+    case "RBR"
+
+        g = 9.81;
+
+        % Ruskin normalmente exporta la densidad.
+        if isfinite(rbr_density)
+            
+            % Asegurar kg/m^3
+            if rbr_density < 10
+                rho = 1000*rbr_density;
+            else
+                rho = rbr_density;
+            end
+
+        else
+            rho = 1025;
+            warning('No se encontró la densidad configurada en Ruskin. Se utilizará 1025 kg/m^3.');
+        end
+
+        if pressure_reference ~= "manometric"
+            error('La presión RBR no fue estandarizada correctamente a presión manométrica.');
+        end
+        
+        pressure_mean_Pa = 10000*pressure_mean;
+        pressure_mean_m = pressure_mean_Pa/(rho*g);
+        z_p = -pressure_mean_m;
+
+        if isfinite(mounting_height)
+            h = pressure_mean_m + mounting_height;
+        end
+
+        % El RBR no mide velocidades orbitales.
+        z_v(:) = NaN;
+
+    otherwise
+        error('Instrumento no válido')
 end
 
 
@@ -362,10 +520,12 @@ for b = 1:nBursts
 end
 
 % Velocidades ENU
-for b = 1:nBursts
-    for component = 1:3
-        x = velocity_enu(:,component,b);
-        velocity_enu(:,component,b) = detrend(x,1);
+if velocity_available
+    for b = 1:nBursts
+        for component = 1:3
+            x = velocity_enu(:,component,b);
+            velocity_enu(:,component,b) = detrend(x,1);
+        end
     end
 end
 
@@ -396,21 +556,23 @@ if filter_flag
     pressure_proc = wsa_bandpass_filter(pressure, sampling_rate, f_i, f_f);
 
     % Velocidades ENU
-    velocity_proc = nan(size(velocity_enu));
-    for iVel = 1:3
-        vel_i = squeeze(velocity_enu(:, iVel, :));
-
-        if isrow(vel_i)
-            vel_i = vel_i(:);
+    if velocity_available
+        velocity_proc = nan(size(velocity_enu));
+        for iVel = 1:3
+            vel_i = squeeze(velocity_enu(:, iVel, :));
+    
+            if isrow(vel_i)
+                vel_i = vel_i(:);
+            end
+    
+            vel_filt = wsa_bandpass_filter(vel_i, sampling_rate, f_i, f_f);
+            velocity_proc(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
+    
         end
-
-        vel_filt = wsa_bandpass_filter(vel_i, sampling_rate, f_i, f_f);
-        velocity_proc(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
-
     end
 
     % AWAC: AST
-    if is_awac
+    if ast_available
         ast_proc = nan(size(ast_corr));
         for iAST = 1:2
             AST_i = squeeze(ast_corr(:, iAST, :));
@@ -428,9 +590,11 @@ if filter_flag
 
 else
     pressure_proc = pressure;
-    velocity_proc = velocity_enu;
+    if velocity_available
+        velocity_proc = velocity_enu;
+    end
 
-    if is_awac
+    if ast_available
         ast_proc = ast_corr;
         ast_proc_comb = ast_corr_comb;
     end
@@ -451,21 +615,23 @@ if IG_filter_flag
     pressure_proc_IG = wsa_bandpass_filter(pressure, sampling_rate, f_i_IG, f_f_IG);
 
     % Velocidades ENU
-    velocity_proc_IG = nan(size(velocity_enu));
-    for iVel = 1:3
-        vel_i = squeeze(velocity_enu(:, iVel, :));
-
-        if isrow(vel_i)
-            vel_i = vel_i(:);
+    if velocity_available
+        velocity_proc_IG = nan(size(velocity_enu));
+        for iVel = 1:3
+            vel_i = squeeze(velocity_enu(:, iVel, :));
+    
+            if isrow(vel_i)
+                vel_i = vel_i(:);
+            end
+    
+            vel_filt = wsa_bandpass_filter(vel_i, sampling_rate, f_i_IG, f_f_IG);
+    
+            velocity_proc_IG(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
         end
-
-        vel_filt = wsa_bandpass_filter(vel_i, sampling_rate, f_i_IG, f_f_IG);
-
-        velocity_proc_IG(:, iVel, :) = reshape(vel_filt, size(velocity_enu,1), 1, []);
     end
 
     % AWAC: AST
-    if is_awac
+    if ast_available
         ast_proc_IG = nan(size(ast_corr));
         for iAST = 1:2
             AST_i = squeeze(ast_corr(:, iAST, :));
@@ -509,6 +675,7 @@ write_nc_variable(ncfile, 'pressure_proc', pressure_proc, ...
     {'sample', size(pressure_proc,1), ...
      'burst', size(pressure_proc,2)}, ...
      'units', 'dBar', ...
+     'pressure_reference', 'manometric', ...
      'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/30 Hz a 1/2 Hz');
 
 write_nc_variable(ncfile, 'velocity_enu', velocity_enu, ...
@@ -530,7 +697,8 @@ write_nc_variable(ncfile, 'pressure_proc_IG', pressure_proc_IG, ...
     {'sample', size(pressure_proc_IG,1), ...
      'burst', size(pressure_proc_IG,2)}, ...
      'units', 'dBar', ...
-     'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/303 Hz a 1/30 Hz');
+     'pressure_reference', 'manometric', ...
+     'description', 'Presión procesada mediante filtro pasa banda de en las frecuencias de 1/300 Hz a 1/30 Hz');
 
 write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
     {'sample', size(velocity_proc_IG,1), ...
@@ -542,6 +710,7 @@ write_nc_variable(ncfile, 'velocity_proc_IG', velocity_proc_IG, ...
 write_nc_variable(ncfile, 'pressure_mean', pressure_mean, ...
     {'burst', nBursts}, ...
     'units', 'dbar', ...
+     'pressure_reference', 'manometric', ...
     'description', 'Presión media.');
 
 
@@ -601,9 +770,20 @@ write_nc_variable(ncfile, 'ast_proc_comb_IG', ast_proc_comb_IG, ...
 %% Atributos del procesamiento
 
 ncwriteatt(ncfile, '/', 'preprocessing_instrument_type', char(instrument_type));
+
+ncwriteatt(ncfile, '/', 'preprocessing_pressure_available', double(pressure_available));
+ncwriteatt(ncfile, '/', 'preprocessing_velocity_available', double(velocity_available));
+ncwriteatt(ncfile, '/', 'preprocessing_AST_available', double(ast_available));
+
+ncwriteatt(ncfile, '/', 'pressure_reference_original', char(pressure_reference_original));
+ncwriteatt(ncfile, '/', 'pressure_reference', 'manometric');
+ncwriteatt(ncfile, '/', 'pressure_atmospheric_correction_applied', double(pressure_atmospheric_correction_applied));
+ncwriteatt(ncfile, '/', 'pressure_atmospheric_correction_dbar', double(pressure_atmospheric_correction_dbar));
+ncwriteatt(ncfile, '/', 'pressure_standardized_during_preprocessing', double(true));
+
 ncwriteatt(ncfile, '/', 'preprocessing_filter_flag', double(filter_flag));
 ncwriteatt(ncfile, '/', 'preprocessing_IG_filter_flag', double(IG_filter_flag));
-ncwriteatt(ncfile, '/', 'preprocessing_AST_correction_flag', double(is_awac && ast_corr_flag));
+ncwriteatt(ncfile, '/', 'preprocessing_AST_correction_flag', double(ast_available && ast_corr_flag));
 ncwriteatt(ncfile, '/', 'preprocessing_bandpass_fi_Hz', f_i);
 ncwriteatt(ncfile, '/', 'preprocessing_bandpass_ff_Hz', f_f);
 
@@ -619,7 +799,12 @@ ncwriteatt(ncfile, '/', 'preprocessing_status', double(true));
 
 info = struct();
 
-info.pressure.raw = pressure;
+info.pressure.raw = pressure; % Sin detrend ni filtro, pero manométrica
+info.pressure.unfiltered = pressure;
+info.pressure.reference = "manometric";
+info.pressure.original_reference = pressure_reference_original;
+info.pressure.atmospheric_correction_applied = pressure_atmospheric_correction_applied;
+info.pressure.atmospheric_correction_dbar = pressure_atmospheric_correction_dbar;
 info.pressure.proc = pressure_proc;
 info.pressure.proc_IG = pressure_proc_IG;
 
@@ -628,7 +813,14 @@ info.velocity_enu.raw = velocity_enu;
 info.velocity_enu.proc = velocity_proc;
 info.velocity_enu.proc_IG = velocity_proc_IG;
 
-info.ast.available = is_awac;
+info.instrument_type = instrument_type;
+
+info.pressure.available = pressure_available;
+
+info.velocity_beams.available = velocity_available;
+info.velocity_enu.available = velocity_available;
+
+info.ast.available = ast_available;
 info.ast.raw = ast;
 info.ast.corr = ast_corr;
 info.ast.proc = ast_proc;
