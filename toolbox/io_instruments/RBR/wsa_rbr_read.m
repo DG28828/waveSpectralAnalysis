@@ -182,6 +182,7 @@ end
 sampling_period_ms = get_numeric_field(metadata.sampling, 'period', NaN);
 expected_nSamples = get_numeric_field(metadata.sampling, 'burstcount', NaN);
 burst_interval_ms = get_numeric_field(metadata.sampling, 'burstinterval', NaN);
+atmpressure_dbar = get_numeric_field(metadata.parameters, 'atmpressure', NaN);
 
 if ~isfinite(sampling_period_ms) || sampling_period_ms <= 0
     error('metadata.sampling.period no contiene un periodo de muestreo válido.');
@@ -193,6 +194,10 @@ end
 
 if ~isfinite(burst_interval_ms) || burst_interval_ms <= 0
     error('metadata.sampling.burstinterval no contiene un intervalo de burst válido.');
+end
+
+if ~isfinite(atmpressure_dbar)
+    error('metadata.parameters.atmpressure no contiene un valor numérico válido.');
 end
 
 sampling_interval_s = sampling_period_ms/1000;
@@ -365,9 +370,13 @@ fprintf('Bursts con número de muestras o intervalo temporal irregular: %d\n', s
 
 %% Verificación de presión
 
+% Convertir límite a presión absoluta, ya que los datos crudos de presión
+% son de presión absoluta
+min_pressure_limit_abs = min_pressure_limit + atmpressure_dbar;
+
 fprintf('\n----------------------------          Verificación de presión          ----------------------------\n');
 fprintf('\nLímites establecidos:\n');
-fprintf('\t-Presión mínima: %.4g dbar\n', min_pressure_limit);
+fprintf('\t-Presión mínima (absoluta): %.4g dbar\n', min_pressure_limit_abs);
 fprintf('\t-Diferencia respecto a la mediana: %.4g dbar\n', pressure_drop_limit);
 fprintf('\t-Porcentaje máximo de muestras inválidas o bajas: %.4g %%\n', bad_pressure_sample_percentage_limit);
 
@@ -387,7 +396,7 @@ fprintf('\t-Porcentaje máximo de muestras inválidas o bajas: %.4g %%\n', bad_p
 mean_pressure = [data.rbr_info.mean_pressure_dbar]';
 median_pressure = median(mean_pressure, 'omitnan');
 
-pressure_flag = ~isfinite(mean_pressure) | mean_pressure < min_pressure_limit | abs(mean_pressure - median_pressure) > pressure_drop_limit;
+pressure_flag = ~isfinite(mean_pressure) | mean_pressure < min_pressure_limit_abs | abs(mean_pressure - median_pressure) > pressure_drop_limit;
 
 pressure_sample_flag = bad_pressure_sample_percentage > bad_pressure_sample_percentage_limit;
 
@@ -683,7 +692,7 @@ if do_plot
         pressure_flag, ...
         bad_pressure_sample_percentage, ...
         pressure_sample_flag, ...
-        min_pressure_limit, ...
+        min_pressure_limit_abs, ...
         pressure_drop_limit, ...
         bad_pressure_sample_percentage_limit, ...
         save_plot_dir);
@@ -965,7 +974,7 @@ function create_rbr_qc_plots( ...
     pressure_flag, ...
     bad_pressure_sample_percentage, ...
     pressure_sample_flag, ...
-    min_pressure_limit, ...
+    min_pressure_limit_abs, ...
     pressure_drop_limit, ...
     bad_pressure_sample_percentage_limit, ...
     save_plot_dir)
@@ -982,7 +991,7 @@ hold on
 
 plot(burst_index, mean_pressure, '-', 'DisplayName', 'Presión media', 'LineWidth', 1.5);
 
-yline(min_pressure_limit, '--', 'DisplayName', 'Presión mínima');
+yline(min_pressure_limit_abs, '--', 'DisplayName', 'Presión mínima');
 yline(median_pressure, '-', 'DisplayName', 'Mediana');
 yline(median_pressure + pressure_drop_limit, ':', 'DisplayName', 'Mediana + límite');
 yline(median_pressure - pressure_drop_limit, ':','DisplayName', 'Mediana - límite');
@@ -993,9 +1002,9 @@ end
 
 hold off
 
-title('Verificación de presión media por burst');
+title('Verificación de presión media absoluta por burst');
 xlabel('Burst');
-ylabel('Presión media (dbar)');
+ylabel('Presión media absoluta (dbar)');
 legend('Location', 'best');
 grid on
 box on
