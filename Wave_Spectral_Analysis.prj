@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="3443261222" file="C:\waveSpectralAnalysis\Wave_Spectral_Analysis.prj" location="C:\waveSpectralAnalysis" name="Wave_Spectral_Analysis" target="target.toolbox" target-name="Package Toolbox">
+  <configuration build-checksum="1494369938" file="C:\waveSpectralAnalysis\Wave_Spectral_Analysis.prj" location="C:\waveSpectralAnalysis" name="Wave_Spectral_Analysis" target="target.toolbox" target-name="Package Toolbox">
     <param.appname>Wave Spectral Analysis</param.appname>
     <param.authnamewatermark>Danny Garro Arias</param.authnamewatermark>
     <param.email>danny.garroarias@ucr.ac.cr</param.email>
@@ -7,7 +7,7 @@
     <param.summary>MATLAB Toolbox for spectral and directional wave analysis.</param.summary>
     <param.description>It includes tools for estimating energy spectra, calculating spectral and directional parameters, reconstructing directional spectra, and processing raw data from Nortek AWAC instruments.</param.description>
     <param.screenshot>${PROJECT_ROOT}\images\waveSpectralAnalysis.jpg</param.screenshot>
-    <param.version>1.1.1</param.version>
+    <param.version>1.2.0</param.version>
     <param.output>${PROJECT_ROOT}\Wave Spectral Analysis.mltbx</param.output>
     <param.products.name>
       <item>Signal Processing Toolbox</item>
