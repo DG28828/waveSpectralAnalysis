@@ -75,7 +75,7 @@ function data_clean = wsa_awac_clean(data_in, varargin)
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
-% Fecha de modificación: 19/05/2026
+% Fecha de modificación: 15/07/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -149,6 +149,7 @@ else
 
 end
 
+bad_bursts = logical(bad_bursts(:));
 good_idx = ~bad_bursts;
 
 % Filtrar estructuras
@@ -162,6 +163,14 @@ fprintf('Se eliminaron %d bursts. Quedan %d bursts válidos.\n', ...
 data_clean.cleaning.Number_of_wave_measurements = sum(good_idx);
 data_clean.cleaning.time_start = data_clean.whd(1).datetime;
 data_clean.cleaning.time_end   = data_clean.whd(end).datetime;
+
+% Banderas referidas a la dimensión original burst_raw
+data_clean.cleaning.is_bad_burst = bad_bursts;
+
+% Información adicional de la limpieza
+data_clean.cleaning.Number_of_raw_wave_measurements = numel(bad_bursts);
+data_clean.cleaning.bad_indices_raw = find(bad_bursts);
+data_clean.cleaning.good_indices_raw = find(good_idx);
 
 % Indicar que se realizó la limpieza
 data_clean.cleaning_status = true;

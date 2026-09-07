@@ -166,6 +166,9 @@ addParameter(p, 'z_v', z_default)
 addParameter(p, 'g', g_default);
 addParameter(p, 'rho',    rho_default);
 addParameter(p, 'Kp_min',    Kp_min_default);
+
+%Otros parámetros
+addParameter(p, 'FrequencyRange', [0 Inf]);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 parse(p, Z, X, Y, fs, method, varargin{:});
@@ -187,6 +190,9 @@ z_v       = p.Results.z_v;
 g    = p.Results.g;
 rho     = p.Results.rho;
 Kp_min = p.Results.Kp_min;
+
+%Resultados de otros parámetros
+frequencyRange = p.Results.FrequencyRange;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -247,6 +253,11 @@ f = out_spectrum.f;
 Spos = S(2:end);
 fpos = f(2:end);
 
+% Mantener solo las frecuencias según parámetro frequencyRange
+keep = isfinite(fpos) & fpos >= frequencyRange(1) & fpos <= frequencyRange(2);
+fpos = fpos(keep);
+Spos = Spos(keep);
+
 
 %% Coeficientes de la serie de Fourier: a1, b1, a2, b2
 
@@ -277,10 +288,22 @@ b1 = out_coeffs.b1;
 a2 = out_coeffs.a2;
 b2 = out_coeffs.b2;
 
+% Mantener solo las frecuencias según parámetro frequencyRange
+a1 = a1(keep);
+b1 = b1(keep);
+a2 = a2(keep);
+b2 = b2(keep);
+out_coeffs.W  = out_coeffs.W(keep);
+out_coeffs.f  = out_coeffs.f(keep);
+out_coeffs.a1 = a1;
+out_coeffs.b1 = b1;
+out_coeffs.a2 = a2;
+out_coeffs.b2 = b2;
+
 %% Método: Serie de Fourier Truncada (TFS)
 
 % Función de distribución direccional definida solo para frecuencias positivas
-out_Fourier = wsa_dir_TFS(a1, b1, Ntheta, a2, b2);
+[out_Fourier, info_dirfourier] = wsa_dir_TFS(a1, b1, Ntheta, a2, b2);
 theta = rad2deg(out_Fourier.theta);     %Se convierte theta de [rad] a [°]
 D = out_Fourier.D*(pi/180);             %Se convierte D de [1 / rad] a [1 / °]
 
@@ -289,7 +312,7 @@ E = Spos(:).*D;
 
 %Verificación energética (área bajo la curva del espectro direccional)
 S_i = trapz(theta, E, 2);
-m0 = trapz(fpos, S_i);
+m0_fourier = trapz(fpos, S_i);
 
 % Struct con resultados
 Fourier = struct;
@@ -298,36 +321,46 @@ Fourier.theta = theta;
 Fourier.D = D;
 Fourier.E = E;
 Fourier.S = Spos;
-Fourier.m0 = m0;
+Fourier.m0 = m0_fourier;
 Fourier.coeffs = out_coeffs;
 
 %% Método: Máxima Entropía Lygre & Krogstad (MEM I)
 
 % Función de distribución direccional definida solo para frecuencias positivas
 [out_dirmem, info_dirmem] = wsa_dir_MEM1(a1, b1, a2, b2, Ntheta);
-theta = rad2deg(out_dirmem.theta);      %Se convierte theta de [rad] a [°]
-D = out_dirmem.D*(pi/180);              %Se convierte D de [1 / rad] a [1 / °]       
+theta_rad = out_dirmem.theta;
+theta = rad2deg(theta_rad);      %Se convierte theta de [rad] a [°]
+D = out_dirmem.D*(pi/180);              %Se convierte D de [1 / rad] a [1 / °]
+
+dtheta_deg = 360/Ntheta;
 
 % Espectro direccional
 E = Spos(:).*D;
 
 %Verificación energética (área bajo la curva del espectro direccional)
 S_i = trapz(theta, E, 2);
-m0 = trapz(fpos, S_i);
+m0_mem = trapz(fpos, S_i);
 
 %Recálculo de los Coeficientes de la Serie de Fourier
-theta_rad = deg2rad(theta);
-mem_a1 = trapz(theta, E.*cos(theta_rad), 2)./Spos(:);
-mem_b1 = trapz(theta, E.*sin(theta_rad), 2)./Spos(:);
-mem_a2 = trapz(theta, E.*cos(2*theta_rad), 2)./Spos(:);
-mem_b2 = trapz(theta, E.*sin(2*theta_rad), 2)./Spos(:);
+mem_a1 = sum(D.*cos(theta_rad), 2)*dtheta_deg;
+mem_b1 = sum(D.*sin(theta_rad), 2)*dtheta_deg;
+mem_a2 = sum(D.*cos(2*theta_rad), 2)*dtheta_deg;
+mem_b2 = sum(D.*sin(2*theta_rad), 2)*dtheta_deg;
 
+% Struct con coeficientes recalculados
 mem_coeffs = struct();
 mem_coeffs.W = out_coeffs.W;
 mem_coeffs.a1 = mem_a1;
 mem_coeffs.b1 = mem_b1;
 mem_coeffs.a2 = mem_a2;
 mem_coeffs.b2 = mem_b2;
+
+%Struct con residuos de coeficientes (diferencias entre coeficientes antes y despues)
+mem_coeff_residual = struct();
+mem_coeff_residual.a1 = mem_a1 - a1;
+mem_coeff_residual.b1 = mem_b1 - b1;
+mem_coeff_residual.a2 = mem_a2 - a2;
+mem_coeff_residual.b2 = mem_b2 - b2;
 
 % Struct con resultados
 MEM = struct;
@@ -336,13 +369,14 @@ MEM.theta = theta;
 MEM.D = D;
 MEM.E = E;
 MEM.S = Spos;
-MEM.m0 = m0;
+MEM.m0 = m0_mem;
 MEM.C1 = out_dirmem.mem_params.C1;
 MEM.C2 = out_dirmem.mem_params.C2;
 MEM.phi1 = out_dirmem.mem_params.phi1;
 MEM.phi2 = out_dirmem.mem_params.phi2;
 MEM.coeffs = out_coeffs;       % Coeficientes usados como entrada del MEM
 MEM.coeffs_mem = mem_coeffs;   % Coeficientes reconstruidos desde Espectro Direcional MEM
+MEM.coeffs_residual = mem_coeff_residual;
 
 %% Resultados
 %Struct para resultados
@@ -352,10 +386,19 @@ out.MEM = MEM;
 
 
 % Información
-info = struct;
-info.m0 = m0;
+info = struct();
+
+info.method = method;
+info.Ntheta = Ntheta;
+info.DoF_requested = DoF;
+
 info.info_spectrum = info_spectrum;
 info.info_coeffs = info_coeffs;
-info.info_dirmem = info_dirmem;
+
+info.Fourier = info_dirfourier;
+info.Fourier.m0 = m0_fourier;
+
+info.MEM = info_dirmem;
+info.MEM.m0 = m0_mem;
 
 end
