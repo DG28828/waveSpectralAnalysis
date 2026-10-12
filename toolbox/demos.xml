@@ -4,7 +4,7 @@
    <type>toolbox</type>
    <icon>HelpIcon.DEMOS</icon>
    <website/>
-   <description>It includes tools for estimating energy spectra, calculating spectral and directional parameters, reconstructing directional spectra, and processing raw data from Nortek AWAC instruments.</description>
+   <description>MATLAB toolbox for wave spectral and directional analysis. It includes tools to estimate energy spectra, compute spectral and directional parameters, reconstruct directional spectra, and process raw data from AWAC, AQUADOPP, and RBR instruments.</description>
    <demosection>
       <label>examples</label>
       <demoitem>
