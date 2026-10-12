@@ -7,7 +7,7 @@
     <param.summary>MATLAB Toolbox for spectral and directional wave analysis.</param.summary>
     <param.description>MATLAB toolbox for wave spectral and directional analysis. It includes tools to estimate energy spectra, compute spectral and directional parameters, reconstruct directional spectra, and process raw data from AWAC, AQUADOPP, and RBR instruments.</param.description>
     <param.screenshot>${PROJECT_ROOT}\images\waveSpectralAnalysis.jpg</param.screenshot>
-    <param.version>2.0.1</param.version>
+    <param.version>2.0.2</param.version>
     <param.output>${PROJECT_ROOT}\Wave Spectral Analysis.mltbx</param.output>
     <param.products.name>
       <item>Signal Processing Toolbox</item>
