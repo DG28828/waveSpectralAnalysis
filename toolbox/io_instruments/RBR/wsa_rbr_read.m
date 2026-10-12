@@ -1,106 +1,103 @@
 function data = wsa_rbr_read(files_dir, varargin)
-%wsa_rbr_read - lectura y verificación de calidad de datos RBR.
+% wsa_rbr_read - lee presión RBR exportada por Ruskin y verifica su calidad.
 %
-%   Esta función importa datos de presión medidos por instrumentos RBR a
-%   partir de los archivos de texto exportados por Ruskin.
+%    Importa presión absoluta en dbar, organiza las muestras por la columna
+%    Burst y conserva metadatos del instrumento y de Ruskin. Genera banderas
+%    QC sin eliminar bursts, filtrar señales ni estimar parámetros de oleaje.
 %
-%   Para mantener la lectura limitada a la información necesaria para el
-%   procesamiento posterior, únicamente se utilizan:
+%    Sintaxis:
+%        data = wsa_rbr_read(files_dir)
+%        data = wsa_rbr_read(files_dir, 'min_pressure_limit', 1, ...
+%                            'pressure_drop_limit', 5, ...
+%                            'bad_pressure_sample_percentage_limit', 5)
+%        data = wsa_rbr_read(files_dir, 'do_plot', true)
+%        data = wsa_rbr_read(files_dir, 'save_plot_dir', 'figuras_qc')
 %
-%       *_metadata.txt   Metadatos del instrumento y configuración de muestreo.
-%       *_burst.txt      Series de presión de cada burst.
+%    Argumento de entrada (requerido):
+%        files_dir - Directorio existente, string escalar o vector char.
+%                    Debe contener un único *_metadata.txt (contenido JSON)
+%                    y un único *_burst.txt con el mismo nombre base.
+%                    El archivo de bursts debe empezar por Time,Burst,Pressure,
+%                    separado por comas. Las fechas se leen con formato
+%                    yyyy-MM-dd HH:mm:ss.SSS y la presión se interpreta en dbar.
+%                    El JSON debe incluir instrument, sampling y parameters;
+%                    se requieren period, burstcount, burstinterval y atmpressure.
 %
-%   Los archivos *_data.txt, *_events.txt y *_wave.txt no se utilizan,
-%   porque contienen datos resumidos, eventos o productos de oleaje
-%   calculados por Ruskin que pueden reconstruirse en etapas posteriores.
+%    Parámetros Nombre-Valor (opcionales):
+%        'min_pressure_limit'
+%                    Escalar numérico finito (dbar). Por defecto: 1.
+%                    En el control de la media se suma la presión atmosférica:
+%                    media absoluta < min_pressure_limit + atmpressure.
+%                    En el porcentaje de muestras se compara directamente
+%                    presión absoluta < min_pressure_limit. Estos umbrales
+%                    efectivos son distintos en la implementación actual.
+%        'pressure_drop_limit'
+%                    Diferencia absoluta máxima respecto a la mediana de las
+%                    presiones medias de la campaña (dbar). Escalar finito
+%                    no negativo. Por defecto: 5.
+%        'bad_pressure_sample_percentage_limit'
+%                    Porcentaje máximo de muestras no finitas o con presión
+%                    absoluta inferior a min_pressure_limit (%).
+%                    Escalar entre 0 y 100. Por defecto: 5.
+%                    Se marca el burst cuando el porcentaje supera el límite.
+%        'do_plot'
+%                    Generar figuras QC. Lógico escalar. Por defecto: false.
+%        'save_plot_dir'
+%                    Directorio para guardar figuras PNG, string o char.
+%                    Por defecto: []. Un valor no vacío activa do_plot y
+%                    crea el directorio si no existe.
 %
-%   La función conserva la presión absoluta exportada por Ruskin en dbar y
-%   organiza las mediciones en bursts. Además, realiza verificaciones de:
+%    Argumento de salida:
+%        data - Struct con:
+%            instrument_type  "RBR".
+%            hdr              Metadatos, muestreo, presión atmosférica,
+%                             densidad, referencia temporal y archivos usados.
+%            rbr_info         Información por burst: burst_index,
+%                             burst_counter, datetime, end_datetime,
+%                             n_wave_records y estadísticas de presión.
+%            rbr              Series: burst_counter, pressure_dbar y nSamples.
+%            quality.flags    samples_flag, pressure_flag y pressure_sample_flag.
+%            quality.summary  Máscara bad_bursts, conteos, índices, fechas,
+%                             actual_samples, expected_samples,
+%                             time_interval_flag, bad_pressure_sample_percentage,
+%                             median_pressure_dbar y burst_time_mismatch_count.
+%            cleaning_status       false al terminar la lectura.
+%            preprocessing_status  false al terminar la lectura.
 %
-%       1) número de muestras e intervalo temporal dentro de cada burst;
-%       2) presión media respecto a un mínimo y a la mediana de la campaña;
-%       3) porcentaje de muestras inválidas o inferiores al mínimo.
+%    Notas:
+%    - sampling.period y sampling.burstinterval se interpretan en ms.
+%      El muestreo se deduce como 1000/period (Hz); no se fija en 1 Hz.
+%    - samples_flag combina cantidad incorrecta de muestras e irregularidad
+%      del intervalo temporal dentro del burst. Las diferencias de intervalo
+%      entre inicios de bursts se notifican y cuentan por separado; no se
+%      incorporan a bad_bursts. bad_bursts combina las tres banderas QC.
+%    - La presión atmosférica debe ser finita y las unidades declaradas,
+%      cuando existen, deben ser dbar. La presión permanece absoluta en esta
+%      lectura; wsa_nc_preprocess realiza la conversión a manométrica.
+%    - Las fechas se conservan sin zona horaria ni corrección del desfase de
+%      Ruskin, guardado en hdr.setup.Time_offset_from_UTC_hours. No se conserva
+%      un datetime por muestra; puede reconstruirse desde el inicio y fs.
+%    - *_data.txt, *_events.txt y *_wave.txt no se leen. Se ignoran las
+%      columnas posteriores a Pressure, incluida la columna derivada Wave.
+%    - Este flujo maneja solo presión; no aporta AST ni velocidades orbitales
+%      y no permite una estimación direccional por sí solo.
 %
+%    Ejemplo:
+%        data = wsa_rbr_read('C:\datos\RBR');
+%        data_clean = wsa_rbr_clean(data);
+%        wsa_nc_write(data_clean, 'rbr_clean.nc', 'mounting_height', 0.50);
+%        info = wsa_nc_preprocess('rbr_clean.nc');
+%        % Sustituir 0.50 por la altura real respecto al fondo.
 %
-%   Sintaxis:
-%       data = wsa_rbr_read(files_dir)
-%
-%       data = wsa_rbr_read(files_dir, ...
-%               'min_pressure_limit', 1, ...
-%               'pressure_drop_limit', 5, ...
-%               'bad_pressure_sample_percentage_limit', 5)
-%
-%       data = wsa_rbr_read(files_dir, 'do_plot', true)
-%
-%
-%   Argumentos de entrada (requeridos):
-%       files_dir  - Directorio que contiene los archivos exportados por
-%                    Ruskin. String escalar o vector char.
-%
-%
-%   Parámetros Nombre-Valor (opcionales):
-%       'min_pressure_limit'
-%                  - Presión absoluta mínima permitida.
-%                    Escalar finito (dbar).
-%                    Por defecto: 1 dbar.
-%
-%       'pressure_drop_limit'
-%                  - Diferencia máxima permitida entre la presión media de
-%                    cada burst y la mediana de la campaña.
-%                    Escalar no negativo (dbar).
-%                    Por defecto: 5 dbar.
-%
-%       'bad_pressure_sample_percentage_limit'
-%                  - Porcentaje máximo permitido de muestras inválidas o
-%                    inferiores a min_pressure_limit dentro de un burst.
-%                    Escalar entre 0 y 100 (%).
-%                    Por defecto: 5 %.
-%
-%       'do_plot'  - Generar figuras de control de calidad.
-%                    true | false. Por defecto: false.
-%
-%       'save_plot_dir'
-%                  - Directorio donde se guardarán las figuras. Cuando se
-%                    especifica, do_plot se activa automáticamente.
-%                    Por defecto: vacío.
-%
-%
-%   Argumento de salida:
-%       data       - Estructura con los campos principales:
-%
-%           hdr         Metadatos seleccionados del instrumento, Ruskin,
-%                       configuración de muestreo y archivos utilizados.
-%
-%           rbr_info    Información escalar por burst:
-%                       burst_index, burst_counter, datetime, end_datetime,
-%                       n_wave_records y estadísticas de presión.
-%
-%           rbr         Series por burst:
-%                       burst_counter, pressure_dbar y nSamples.
-%
-%           quality     Flags y resumen de control de calidad.
-%
-%           cleaning_status       false al finalizar la lectura.
-%           preprocessing_status  false al finalizar la lectura.
-%
-%
-%   Notas:
-%   • Los tiempos se conservan tal como aparecen en el archivo *_burst.txt,
-%     sin asignar una zona horaria. El desfase UTC indicado por Ruskin se
-%     guarda en data.hdr.setup.Time_offset_from_UTC_hours.
-%
-%   • No se almacena un vector datetime por muestra. Los tiempos de muestra
-%     pueden reconstruirse a partir del inicio del burst y la frecuencia de
-%     muestreo.
-%
-%   • La columna Wave del archivo *_burst.txt se ignora ya que corresponde a un producto derivado por Ruskin.
-%
+%    See also wsa_rbr_clean, wsa_nc_write, wsa_nc_preprocess.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 03/08/2026
 % Fecha de modificación: 05/08/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

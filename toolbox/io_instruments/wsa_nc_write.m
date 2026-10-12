@@ -1,72 +1,96 @@
 function wsa_nc_write(data, ncfile, varargin)
-%wsa_nc_write - exporta datos de instrumentos a formato netCDF.
+% wsa_nc_write - exporta datos AWAC, AQUADOPP o RBR a un NetCDF común.
 %
-%   Esta función exporta una estructura de datos AWAC | AQUADOPP | RBR a 
-%   un archivo netCDF.
+%    Escribe una campaña cruda o limpia sin realizar preprocesamiento.
+%    Identifica el instrumento por los campos del struct y guarda señales,
+%    metadatos, control de calidad y la máscara de selección de bursts.
 %
-%   La estructura de entrada puede corresponder a datos crudos importados
-%   mediante wsa_awac_read, wsa_aquadopp_read, wsa_rbr_read o a datos 
-%   previamente limpiados mediante wsa_awac_clean, wsa_aquadopp_clean o 
-%   wsa_rbr_clean.
+%    Sintaxis:
+%        wsa_nc_write(data, ncfile)
+%        wsa_nc_write(data, ncfile, 'site_name', 'Sitio', ...
+%                     'campaign_name', 'Campaña', 'mounting_height', 0.50)
+%        wsa_nc_write(data, ncfile, 'overwrite', false)
 %
+%    Argumentos de entrada (requeridos):
+%        data   - Struct generado por el lector o limpiador correspondiente:
+%                 AWAC:     wsa_awac_read o wsa_awac_clean; whd y wad.
+%                 AQUADOPP: wsa_aquadopp_read o wsa_aquadopp_clean; dia_info y dia.
+%                 RBR:      wsa_rbr_read o wsa_rbr_clean; rbr_info y rbr.
+%                 Se requieren además hdr y los campos de calidad/estado
+%                 generados por ese flujo. No se pueden mezclar instrumentos.
+%        ncfile - Ruta al archivo a crear, string escalar o vector char.
+%                 El directorio de salida se crea si no existe.
 %
-%   Sintaxis:
-%       wsa_nc_write(data, ncfile)
+%    Parámetros Nombre-Valor (opcionales):
+%        'site_name'       Nombre del sitio, string o char. Por defecto: "".
+%        'campaign_name'   Nombre de campaña, string o char. Por defecto: "".
+%        'mounting_height' Altura del instrumento respecto al fondo (m).
+%                          Escalar numérico finito cuando se especifica.
+%                          Por defecto: []. Se guarda como mounting_height_m;
+%                          si se omite, se almacena NaN y disponibilidad falsa.
+%                          Necesaria para una profundidad h válida en el
+%                          preprocesamiento; no se deduce de los datos crudos.
+%        'overwrite'      Permitir sustituir un NetCDF existente.
+%                          Lógico escalar. Por defecto: true.
+%                          true elimina el archivo existente antes de crear
+%                          el nuevo; false produce error si el archivo existe.
 %
-%       wsa_nc_write(data, ncfile, ...
-%                       'site_name', site_name, ...
-%                       'campaign_name', campaign_name)
+%    Salida:
+%        No devuelve argumentos. El resultado se guarda en ncfile.
 %
-%       wsa_nc_write(data, ncfile, ...
-%                       'site_name', site_name, ...
-%                       'campaign_name', campaign_name, ...
-%                       'mounting_height', mounting_height, ...
-%                       'overwrite', true)
+%    Contenido principal del NetCDF:
+%        burst       Bursts presentes en data, crudos o retenidos tras limpiar.
+%        burst_raw   Dimensión de las banderas QC de la campaña original.
+%        sample      Muestras por burst según la configuración del instrumento.
+%        time        Inicio de cada burst en segundos POSIX.
+%        pressure    Presión (dbar), dimensiones sample x burst.
+%        velocity_beams
+%                    Velocidades (m/s), sample x 3 x burst. En AQUADOPP ENU,
+%                    el nombre se conserva aunque las componentes ya sean ENU.
+%        ast         Distancias AST (m), sample x 2 x burst, cuando disponibles.
+%        is_bad_burst
+%                    Máscara sobre burst_raw. En datos limpios identifica los
+%                    bursts eliminados; sin limpiar conserva la máscara QC.
+%        Otros       Orientación, presión mínima/máxima, amplitudes, matriz de
+%                    transformación, flags QC disponibles y variables auxiliares.
+%        Atributos   instrument_type, sampling_rate_Hz, number_of_samples,
+%                    coordinate_system, mounting_height_m, estados del flujo
+%                    y metadatos de campaña. RBR añade referencia de presión,
+%                    presión atmosférica, densidad y desfase UTC de Ruskin.
 %
+%    Notas:
+%    - Se verifica que información y series tengan el mismo número de bursts,
+%      que exista al menos uno y que la máscara QC concuerde con la limpieza.
+%    - Las banderas de calidad permanecen referidas a la dimensión original,
+%      aunque las series correspondan solo a los bursts retenidos.
+%    - Variables no aplicables y valores no finitos se almacenan mediante
+%      _FillValue. data_available indica si existe al menos un dato finito en
+%      la variable; no representa una máscara de validez muestra por muestra.
+%    - En RBR se conserva la presión absoluta exportada por Ruskin. La
+%      conversión atmosférica se realiza después, con wsa_nc_preprocess.
+%    - Los datetime sin TimeZone se interpretan como UTC al convertir a POSIX.
+%      No se aplica automáticamente time_offset_from_UTC_hours. Prepare las
+%      fechas en la referencia adecuada antes de exportar, especialmente RBR.
+%    - No se filtran señales ni se estima energía/dirección. El atributo
+%      preprocessing_status se inicializa en false.
 %
-%   Argumentos de entrada (requeridos):
-%       data    - Estructura de datos AWAC | AQUADOPP | RBR.
-%                   Estructura generada por wsa_awac_read o
-%                   wsa_awac_clean.
+%    Ejemplo:
+%        data = wsa_rbr_read('C:\datos\RBR');
+%        data_clean = wsa_rbr_clean(data);
+%        wsa_nc_write(data_clean, 'rbr_clean.nc', ...
+%                     'site_name', 'Sitio', 'campaign_name', 'Campaña', ...
+%                     'mounting_height', 0.50, 'overwrite', false);
+%        % Sustituir 0.50 por la altura real respecto al fondo.
 %
-%       ncfile  - Ruta completa del archivo netCDF a crear.
-%                   String | char.
-%
-%
-%   Parámetros Nombre-Valor (opcionales):
-%       'site_name'
-%               - Nombre del sitio de medición.
-%                   String | char.
-%                   Por defecto: "".
-%
-%       'campaign_name'
-%               - Nombre de la campaña de medición.
-%                   String | char.
-%                   Por defecto: "".
-%
-%       'mounting_height'
-%               - Altura de montaje del instrumento respecto al fondo.
-%                   Escalar numérico (m).
-%                   Por defecto: [].
-%
-%       'overwrite'
-%               - Bandera para sobrescribir el archivo netCDF si ya existe.
-%                   true | false
-%                   Por defecto: true.
-%
-%
-%   Argumentos de salida:
-%       Esta función no devuelve argumentos de salida. El resultado se 
-%       guarda directamente en el archivo especificado por ncfile.
-%
-%
-%
+%    See also wsa_awac_read, wsa_aquadopp_read, wsa_rbr_read, wsa_nc_preprocess.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
 % Fecha de modificación: 06/08/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

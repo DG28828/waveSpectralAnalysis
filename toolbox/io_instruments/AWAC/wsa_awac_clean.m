@@ -1,81 +1,73 @@
 function data_clean = wsa_awac_clean(data_in, varargin)
-%wsa_awac_clean - limpia datos AWAC a partir de flags de calidad.
+% wsa_awac_clean - elimina bursts AWAC de forma automática o manual.
 %
-%   Esta función elimina bursts problemáticos de una estructura de datos
-%   AWAC previamente importada mediante wsa_awac_read, o reconstruida desde
-%   un archivo raw.nc.
+%    Filtra los campos whd y wad de una campaña importada con wsa_awac_read.
+%    Conserva las muestras de los bursts retenidos y registra la selección
+%    mediante índices referidos a la campaña original.
 %
-%   La limpieza puede realizarse de forma automática, utilizando los flags
-%   de calidad generados durante la lectura de los datos, o de forma manual,
-%   indicando directamente los índices de los bursts que se desean eliminar.
+%    Sintaxis:
+%        data_clean = wsa_awac_clean(data_in)
+%        data_clean = wsa_awac_clean(data_in, ...
+%                                   'man', true, 'clean_idx', [1 2 10])
 %
+%    Argumento de entrada (requerido):
+%        data_in - Struct de datos crudos generado por wsa_awac_read.
+%                  También se contempla una ruta string o char a un NetCDF
+%                  crudo compatible con wsa_awac_nc_read_raw. Consulte las
+%                  limitaciones de esta reconstrucción en las notas.
 %
-%   Sintaxis:
-%       data_clean = wsa_awac_clean(data_in)
+%    Parámetros Nombre-Valor (opcionales):
+%        'man'       true para selección manual; false para utilizar
+%                    data.quality.summary.bad_bursts. Por defecto: false.
+%        'clean_idx' Vector de índices de los bursts que se desean eliminar,
+%                    referidos a la entrada antes de esta limpieza; no son
+%                    los valores del contador del instrumento.
+%                    Por defecto: []. Requerido y no vacío si man = true.
+%                    Use enteros entre 1 y el número de bursts originales.
 %
-%       data_clean = wsa_awac_clean(data_in, 'man', true, 'clean_idx', clean_idx)
+%    Argumento de salida:
+%        data_clean - Copia del struct con whd y wad filtrados.
+%            cleaning_status   true.
+%            cleaning          Struct con:
+%                Number_of_wave_measurements     Bursts retenidos.
+%                Number_of_raw_wave_measurements Bursts de entrada.
+%                time_start, time_end            Inicio del primer y último
+%                                                burst retenidos (.whd).
+%                cleaning_type                   'automatic' o 'manual'.
+%                is_bad_burst                    Máscara sobre bursts de entrada.
+%                bad_indices_raw                 Índices eliminados.
+%                good_indices_raw                Índices retenidos.
 %
+%    Notas:
+%    - En modo manual se eliminan exclusivamente clean_idx. Los bursts
+%      marcados por QC no se eliminan adicionalmente de forma automática.
+%    - quality se conserva en la dimensión original; no se recalculan sus
+%      flags ni su resumen después de filtrar whd y wad.
+%    - No se aceptan datos con cleaning_status = true. Debe quedar al menos
+%      un burst: la función utiliza el primero y el último para sus fechas.
+%    - Para el flujo v2.0.0 se recomienda utilizar el struct del lector.
+%      La reconstrucción auxiliar desde NetCDF aún consulta atributos de
+%      versiones anteriores, como wave_sampling_rate_Hz y Coordinate_system,
+%      y no completa todos los metadatos necesarios para volver a exportar
+%      con wsa_nc_write. La aceptación de una ruta no garantiza ese recorrido.
+%    - La limpieza no modifica muestras, ni aplica correcciones o filtros.
+%      Exporte el resultado con wsa_nc_write antes de wsa_nc_preprocess.
 %
-%   Argumentos de entrada (requeridos):
-%       data_in   - Datos AWAC crudos.
-%                   Puede ser:
+%    Ejemplo:
+%        data = wsa_awac_read('C:\datos\AWAC');
+%        data_clean = wsa_awac_clean(data, 'man', true, 'clean_idx', [1 2]);
+%        wsa_nc_write(data_clean, 'awac_clean.nc', 'mounting_height', 0.50);
+%        % Sustituir 0.50 por la altura real respecto al fondo.
 %
-%                       1) Estructura data generada por wsa_awac_read.
-%
-%                       2) Ruta a un archivo raw.nc generado previamente.
-%                          String | char.
-%
-%
-%   Parámetros Nombre-Valor (opcionales):
-%       'man'     - Bandera para activar limpieza manual.
-%                   true | false
-%                   Por defecto: false.
-%
-%       'clean_idx'
-%                 - Índices de bursts que se desean eliminar manualmente.
-%                   Vector de enteros positivos.
-%
-%                   Este parámetro es requerido cuando: 'man' = true                  
-%
-%
-%   Argumentos de salida:
-%       data_clean - Estructura AWAC limpia.
-%
-%                    Conserva la estructura general de data_in, pero elimina
-%                    de los campos whd y wad los bursts marcados como malos.
-%
-%                    Además, agrega o actualiza:
-%
-%                    cleaning.Number_of_wave_measurements
-%                    cleaning.time_start
-%                    cleaning.time_end
-%                    cleaning.cleaning_type
-%                    cleaning_status
-%
-%
-%   Notas:
-%   • En modo automático, la función elimina los bursts indicados en:
-%
-%         data.quality.summary.bad_bursts
-%
-%   • En modo manual, la función elimina únicamente los bursts indicados
-%     mediante clean_idx.
-%
-%   • La función no modifica las series temporales dentro de cada burst.
-%     Únicamente elimina bursts completos.
-%
-%   • La función verifica que los datos de entrada no hayan sido limpiados
-%     previamente mediante el campo cleaning_status.
-%
-%   • Si data_in corresponde a una ruta raw.nc, la estructura data se
-%     reconstruye internamente mediante wsa_awac_nc_read_raw.
-%
+%    See also wsa_awac_read, wsa_awac_nc_read_raw, wsa_nc_write.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
 % Fecha de modificación: 15/07/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

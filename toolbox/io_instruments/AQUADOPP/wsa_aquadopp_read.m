@@ -1,14 +1,113 @@
 function data = wsa_aquadopp_read(files_dir, varargin)
-%wsa_aquadopp_read - lectura y verificación de calidad de datos AQUADOPP.
+% wsa_aquadopp_read - lee AQUADOPP y verifica bursts diagnósticos.
 %
+%    Importa los archivos de texto .hdr, .dat y .dia de una campaña AQUADOPP.
+%    Conserva los registros regulares de .dat y organiza las series de .dia
+%    en bursts diagnósticos de presión y velocidad, con control de calidad.
 %
+%    Sintaxis:
+%        data = wsa_aquadopp_read(files_dir)
+%        data = wsa_aquadopp_read(files_dir, 'tilt_limit', 30, ...
+%                                'heading_jump_limit', 20, 'tilt_jump_limit', 5)
+%        data = wsa_aquadopp_read(files_dir, 'do_plot', true)
+%        data = wsa_aquadopp_read(files_dir, 'save_plot_dir', 'figuras_qc')
 %
+%    Argumento de entrada (requerido):
+%        files_dir - Directorio existente, string escalar o vector char.
+%                    Debe contener un único .hdr, un único .dat y un único
+%                    .dia. Los archivos numéricos deben coincidir con las
+%                    columnas descritas en el .hdr.
+%
+%    Parámetros Nombre-Valor (opcionales):
+%        'tilt_limit'
+%                    Límite de la inclinación máxima dentro del burst (°).
+%                    Por defecto: 30. Activa bad_tilt_flag al superarse.
+%        'heading_jump_limit'
+%                    Cambio máximo de heading entre bursts consecutivos (°),
+%                    considerando el cruce entre 0 y 360°. Por defecto: 20.
+%        'tilt_jump_limit'
+%                    Cambio angular máximo del eje Z entre bursts (°),
+%                    obtenido de sus pitch y roll representativos.
+%                    Por defecto: 5. No es la simple diferencia de tilt.
+%        'min_pressure_limit'
+%                    Presión mínima para la media y las muestras (dbar).
+%                    Por defecto: 1. Se interpreta como presión manométrica.
+%        'pressure_drop_limit'
+%                    Diferencia absoluta máxima entre la presión media del
+%                    burst y la mediana de las medias de la campaña (dbar).
+%                    Por defecto: 5. Se consideran ambos sentidos.
+%        'bad_pressure_sample_percentage_limit'
+%                    Porcentaje máximo de muestras por debajo de
+%                    min_pressure_limit (%). Por defecto: 5.
+%                    Se marca el burst si el porcentaje supera este valor.
+%        'do_plot'
+%                    Generar figuras QC. true | false. Por defecto: false.
+%        'save_plot_dir'
+%                    Directorio para guardar figuras PNG, string o char.
+%                    Por defecto: []. Un valor no vacío activa do_plot y
+%                    crea el directorio si no existe.
+%
+%    Argumento de salida:
+%        data - Struct de campaña con:
+%            hdr         Configuración, metadatos, formatos de columnas,
+%                        método de segmentación y rutas de entrada.
+%            dat         Registros regulares del instrumento.
+%            dia         Series por burst diagnóstico: datetime,
+%                        pressure_dbar, beam_velocity_ms, amplitude,
+%                        orientación por muestra, códigos y nSamples.
+%            dia_info    Resumen por burst: fechas, número de muestras,
+%                        heading medio circular, medianas de pitch, roll y
+%                        tilt, max_tilt_deg y estadísticas de presión.
+%            quality.flags
+%                        samples_flag, heading_jump_flag, tilt_jump_flag,
+%                        orientation_flag, bad_tilt_flag,
+%                        warning_tilt_flag_5, warning_tilt_flag_20,
+%                        pressure_flag y pressure_sample_flag.
+%            quality.summary
+%                        Máscara bad_bursts, conteos, porcentajes, índices y
+%                        fechas. bad_bursts combina samples_flag,
+%                        orientation_flag, pressure_flag y pressure_sample_flag.
+%            cleaning_status       false al terminar la lectura.
+%            preprocessing_status  false al terminar la lectura.
+%
+%    Notas:
+%    - La implementación corresponde al flujo AQUADOPP 300 m - Legacy y
+%      fija Diagnostics_Sampling_rate_Hz = 1. No deduce otra frecuencia del
+%      archivo. Revise esta suposición para otros modelos o configuraciones.
+%    - El lector espera coordenadas ENU y advierte si el .hdr indica otro
+%      sistema. No transforma las velocidades; wsa_nc_preprocess gestiona
+%      ENU y BEAM con los metadatos necesarios. XYZ no está soportado allí.
+%    - El nombre beam_velocity_ms del struct también se usa cuando los
+%      datos están en ENU; debe interpretarse junto con Coordinate_system.
+%    - .dia se segmenta usando discontinuidades temporales mayores a 10 s.
+%      Aunque existe una alternativa por contador, el cálculo posterior de
+%      dia_info usa fechas. Para este flujo se requieren las seis columnas
+%      de fecha y hora de .dia.
+%    - samples_flag compara las muestras de .dia con
+%      hdr.setup.Diagnostics_Number_of_samples; no se exige correspondencia
+%      uno a uno entre los registros regulares de .dat y los bursts de .dia.
+%    - Los warnings de tilt usan la mediana del burst y umbrales de 5° y 20°;
+%      no se incluyen por sí solos en bad_bursts. bad_tilt_flag usa el máximo
+%      dentro del burst y tilt_limit. pitch_limit y roll_limit no están activos.
+%    - Los tiempos se importan sin zona horaria. La lectura no elimina
+%      bursts, no filtra señales y no estima espectros.
+%
+%    Ejemplo:
+%        data = wsa_aquadopp_read('C:\datos\AQUADOPP');
+%        data_clean = wsa_aquadopp_clean(data);
+%        wsa_nc_write(data_clean, 'aquadopp_clean.nc', 'mounting_height', 0.50);
+%        info = wsa_nc_preprocess('aquadopp_clean.nc');
+%        % Sustituir 0.50 por la altura real respecto al fondo.
+%
+%    See also wsa_aquadopp_clean, wsa_nc_write, wsa_nc_preprocess.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 22/07/2026
 % Fecha de modificación: 27/07/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

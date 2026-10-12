@@ -1,14 +1,135 @@
 function info = wsa_nc_preprocess(ncfile, varargin)
-%wsa_nc_preprocess - preprocesa señales de oleaje guardadas en netCDF para instrumentos de medición.
+% wsa_nc_preprocess - preprocesa señales AWAC, AQUADOPP o RBR en NetCDF.
 %
+%    Lee un NetCDF del esquema wsa_nc_write, identifica el instrumento,
+%    estandariza la presión y procesa las señales disponibles. Escribe los
+%    resultados en el mismo archivo y devuelve el struct info.
 %
+%    Sintaxis:
+%        info = wsa_nc_preprocess(ncfile)
+%        info = wsa_nc_preprocess(ncfile, 'filter_flag', false)
+%        info = wsa_nc_preprocess(ncfile, 'ast_corr_flag', false, ...
+%                                 'filter_flag', false, 'IG_filter_flag', false)
+%
+%    Argumento de entrada (requerido):
+%        ncfile - Ruta string o char a un NetCDF existente del esquema v2.0.0.
+%                 Debe incluir instrument_type = AWAC, AQUADOPP o RBR,
+%                 sampling_rate_Hz positivo y atributos data_available de
+%                 las variables consultadas. No es un lector de NetCDF genérico.
+%                 Variables requeridas:
+%                 Comunes: time y pressure, con datos de presión disponibles.
+%                 AWAC: ast, velocity_beams, transformation_matrix, heading,
+%                       pitch, roll y cell_position.
+%                 AQUADOPP: velocity_beams; en BEAM se requieren también
+%                           transformation_matrix, heading, pitch y roll.
+%                 RBR: tiempo y presión; para presión absoluta se necesita
+%                      atmospheric_pressure_dbar finita y pressure_reference.
+%
+%    Parámetros Nombre-Valor (opcionales; lógicos escalares):
+%        'ast_corr_flag'  Corregir las dos señales AST mediante wsa_ast_corr.
+%                         Por defecto: true. Se omite si no hay AST.
+%                         false conserva los datos AST para combinar y remover tendencia;
+%                         no desactiva la combinación ni los otros filtros.
+%        'filter_flag'    Filtrar las señales disponibles entre 1/30 y 1/2 Hz.
+%                         Por defecto: true. false conserva las señales sin
+%                         ese filtro, pero mantiene la remoción de media y
+%                         tendencia. El corte de 1/2 Hz requiere fs >= 1 Hz.
+%        'IG_filter_flag' Generar señales IG entre 1/300 y 1/30 Hz.
+%                         Por defecto: true. Es independiente de filter_flag.
+%                         false deja las salidas IG sin datos disponibles;
+%                         no las sustituye por señales sin filtrar.
+%
+%    Argumento de salida:
+%        info - Struct con los siguientes grupos principales:
+%            instrument_type          Instrumento identificado.
+%            pressure                 raw, unfiltered, proc, proc_IG,
+%                                     available, reference, original_reference,
+%                                     atmospheric_correction_applied y
+%                                     atmospheric_correction_dbar.
+%            velocity_beams           raw y available.
+%            velocity_enu             raw, proc, proc_IG y available.
+%            ast                      raw, corr, proc, proc_comb, proc_IG,
+%                                     proc_comb_IG, mean, available,
+%                                     ast_bad_detects y ast_bad_detects_percentage.
+%            transformation_matrix    Matriz disponible o NaN.
+%            heading, pitch, roll     Orientación por burst o NaN.
+%            filter                   Flags y frecuencias de corte usadas.
+%
+%    Resultados escritos en ncfile:
+%        burst_time, burst_time_ast   Tiempo por muestra; AST combinado a 2*fs.
+%        h, z_p, z_v                 Profundidad y posiciones de sensores (m).
+%        pressure_mean               Presión media manométrica por burst (dbar).
+%        pressure_proc, pressure_proc_IG
+%        velocity_enu, velocity_proc, velocity_proc_IG
+%        ast_proc, ast_proc_comb, ast_proc_IG, ast_proc_comb_IG
+%        ast_mean, ast_bad_detects, ast_bad_detects_percentage
+%        Atributos                   Disponibilidad, opciones, referencia de
+%                                    presión y preprocessing_status = true.
+%        pressure                    Se actualiza a referencia manométrica.
+%        min_pressure, max_pressure  En RBR, también se actualizan si existen.
+%
+%    Procesamiento por instrumento:
+%    - AWAC: corrige AST si se solicita, combina las dos señales a 2*fs y
+%      transforma velocidades desde BEAM a ENU. En este flujo AWAC se aplica
+%      la transformación incluso si coordinate_system indica ENU.
+%      Calcula z_p y h desde AST medio y la altura de montaje.
+%    - AQUADOPP: conserva velocidades ENU o transforma BEAM con la matriz y
+%      orientación. XYZ produce error. La profundidad del sensor se obtiene
+%      de la presión media con rho = 1025 kg/m^3 y g = 9.81 m/s^2.
+%      La posición de celda se fija en blanking_distance_m + 1.5*0.75 m.
+%    - RBR: resta atmospheric_pressure_dbar si la referencia es absoluta;
+%      si ya es manométrica, no vuelve a restarla. Usa ruskin_density cuando
+%      está disponible (convierte valores menores a 10 a kg/m^3 multiplicando
+%      por 1000), o rho = 1025 kg/m^3. g = 9.81 m/s^2.
+%      No procesa AST ni velocidades; z_v permanece sin datos.
+%
+%    Notas:
+%    - La presión se conserva en dbar. La corrección atmosférica de RBR no
+%      equivale a Kp; Kp se aplica al estimar espectros con wsa_spectrum.
+%    - h requiere mounting_height_m finita. Si falta, puede quedar NaN aunque
+%      la presión sea procesable. h, z_p y z_v se guardan en el NetCDF, pero
+%      no son campos del struct info. z_p y z_v se miden desde el nivel medio
+%      y son negativos para sensores sumergidos.
+%    - En la implementación actual, info.pressure.raw y unfiltered contienen
+%      la presión manométrica ya sin media ni tendencia, pese a su nombre.
+%      info.velocity_enu.raw también está sin media ni tendencia, mientras que
+%      info.velocity_beams.raw conserva la entrada. La variable pressure
+%      del NetCDF conserva la señal manométrica antes de remover tendencia y filtrar.
+%    - Las series y sus dimensiones son sample x burst para presión,
+%      sample x 3 x burst para velocidades y sample x 2 x burst para AST.
+%      AST combinado tiene 2*sample x burst y frecuencia 2*fs.
+%    - El filtrado requiere señales finitas. Limpie o revise los bursts antes
+%      de procesar; esta función no elimina bursts ni corrige presión/velocidad
+%      con muestras inválidas. Las correcciones de picos solo corresponden a AST.
+%    - Variables no aplicables se guardan con _FillValue; en info se utiliza
+%      NaN. Consulte los indicadores de disponibilidad antes de usarlas.
+%    - No se aplica una conversión de zona horaria ni el desfase UTC de Ruskin.
+%      Las fechas se utilizan como están representadas en el NetCDF.
+%    - Ejecutar de nuevo modifica las variables y atributos existentes;
+%      la función no rechaza archivos con preprocessing_status = true.
+%    - Los NetCDF de v1.2.0 deben volver a exportarse con wsa_nc_write por los
+%      cambios en los nombres y atributos del esquema.
+%
+%    Ejemplo:
+%        data = wsa_rbr_read('C:\datos\RBR');
+%        data_clean = wsa_rbr_clean(data);
+%        wsa_nc_write(data_clean, 'rbr_clean.nc', 'mounting_height', 0.50);
+%        info = wsa_nc_preprocess('rbr_clean.nc', 'filter_flag', false);
+%        h = ncread('rbr_clean.nc', 'h');
+%        z_p = ncread('rbr_clean.nc', 'z_p');
+%        % Sustituir 0.50 por la altura real respecto al fondo.
+%
+%    See also wsa_nc_write, wsa_ast_corr, wsa_velocity_transformation, wsa_bandpass_filter, wsa_spectrum.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
 % Fecha de modificación: 06/08/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
+
 %% Manejo de entradas
 
 p = inputParser;

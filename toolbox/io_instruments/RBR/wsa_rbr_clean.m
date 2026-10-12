@@ -1,13 +1,70 @@
 function data_clean = wsa_rbr_clean(data_in, varargin)
-%wsa_aquadopp_clean - limpia datos AQUADOPP a partir de flags de calidad.
+% wsa_rbr_clean - elimina bursts RBR de forma automática o manual.
 %
+%    Filtra rbr y rbr_info de una campaña importada mediante wsa_rbr_read.
+%    Conserva las muestras de los bursts retenidos y registra la selección
+%    respecto a los índices de la campaña original.
 %
+%    Sintaxis:
+%        data_clean = wsa_rbr_clean(data_in)
+%        data_clean = wsa_rbr_clean(data_in, ...
+%                                  'man', true, 'clean_idx', [1 2 10])
+%
+%    Argumento de entrada (requerido):
+%        data_in - Struct de datos crudos generado por wsa_rbr_read, con
+%                  rbr y rbr_info. Para el modo automático se requiere
+%                  quality.summary.bad_bursts. No admite una ruta NetCDF;
+%                  la reconstrucción desde archivo no está implementada.
+%
+%    Parámetros Nombre-Valor (opcionales):
+%        'man'       true para eliminar índices manuales; false para utilizar
+%                    quality.summary.bad_bursts. Lógico escalar.
+%                    Por defecto: false.
+%        'clean_idx' Vector numérico de índices a eliminar, referidos a la
+%                    entrada antes de limpiar; no son los valores de Burst
+%                    exportados por Ruskin.
+%                    Por defecto: []. Requerido y no vacío si man = true.
+%                    En modo manual se validan enteros finitos entre 1 y
+%                    numel(data.rbr), y se eliminan índices duplicados.
+%
+%    Argumento de salida:
+%        data_clean - Copia del struct con rbr y rbr_info filtrados.
+%            cleaning_status   true.
+%            cleaning          Struct con:
+%                Number_of_wave_measurements     Bursts retenidos.
+%                Number_of_raw_wave_measurements Bursts de entrada.
+%                time_start, time_end            Inicio del primero y fin
+%                                                del último retenidos.
+%                cleaning_type                   'automatic' o 'manual'.
+%                is_bad_burst                    Máscara sobre la entrada.
+%                bad_indices_raw                 Índices eliminados.
+%                good_indices_raw                Índices retenidos.
+%
+%    Notas:
+%    - En modo manual no se aplica además la máscara automática de QC.
+%    - quality conserva las banderas y el resumen de la campaña original;
+%      no se recalcula después de seleccionar los bursts.
+%    - Se rechazan datos con cleaning_status = true. Debe quedar al menos
+%      un burst para obtener las fechas de la campaña limpia.
+%    - La presión permanece absoluta, en dbar. La limpieza no corrige
+%      presión atmosférica, no filtra ni modifica las muestras retenidas.
+%      La conversión a manométrica corresponde a wsa_nc_preprocess.
+%
+%    Ejemplo:
+%        data = wsa_rbr_read('C:\datos\RBR');
+%        data_clean = wsa_rbr_clean(data, 'man', true, 'clean_idx', [1 2]);
+%        wsa_nc_write(data_clean, 'rbr_clean.nc', 'mounting_height', 0.50);
+%        % Sustituir 0.50 por la altura real respecto al fondo.
+%
+%    See also wsa_rbr_read, wsa_nc_write, wsa_nc_preprocess.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 05/07/2026
 % Fecha de modificación: 05/07/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas

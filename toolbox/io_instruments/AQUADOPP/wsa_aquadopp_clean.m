@@ -1,13 +1,76 @@
 function data_clean = wsa_aquadopp_clean(data_in, varargin)
-%wsa_aquadopp_clean - limpia datos AQUADOPP a partir de flags de calidad.
+% wsa_aquadopp_clean - elimina bursts diagnósticos AQUADOPP.
 %
+%    Filtra dia y dia_info de una campaña importada con wsa_aquadopp_read.
+%    La selección puede basarse en el control de calidad o en índices
+%    manuales. Conserva íntegramente los registros regulares de data.dat.
 %
+%    Sintaxis:
+%        data_clean = wsa_aquadopp_clean(data_in)
+%        data_clean = wsa_aquadopp_clean(data_in, ...
+%                                       'man', true, 'clean_idx', [1 2 10])
+%
+%    Argumento de entrada (requerido):
+%        data_in - Struct de datos crudos generado por wsa_aquadopp_read,
+%                  con dia, dia_info y dat. Para el modo automático también
+%                  debe contener quality.summary.bad_bursts.
+%                  Consulte las notas sobre la alternativa de ruta NetCDF.
+%
+%    Parámetros Nombre-Valor (opcionales):
+%        'man'       true para eliminar índices manuales; false para usar
+%                    quality.summary.bad_bursts. Lógico escalar.
+%                    Por defecto: false.
+%        'clean_idx' Vector numérico de índices que se desean eliminar,
+%                    referidos a la entrada antes de limpiar; no son los
+%                    valores del contador del instrumento.
+%                    Por defecto: []. Requerido y no vacío si man = true.
+%                    En modo manual se validan enteros finitos entre 1 y
+%                    numel(data.dia), y se eliminan índices duplicados.
+%
+%    Argumento de salida:
+%        data_clean - Copia del struct con dia y dia_info filtrados.
+%            dat               Registros regulares originales, sin filtrar.
+%            cleaning_status   true.
+%            cleaning          Struct con:
+%                Number_of_wave_measurements       Bursts retenidos.
+%                Number_of_diagnostic_bursts        Bursts retenidos.
+%                Number_of_raw_wave_measurements   Bursts de entrada.
+%                Number_of_raw_diagnostic_bursts    Bursts de entrada.
+%                time_start, time_end              Inicio del primero y fin
+%                                                  del último retenidos.
+%                cleaning_type                     'automatic' o 'manual'.
+%                is_bad_burst                      Máscara sobre la entrada.
+%                bad_indices_raw                   Índices eliminados.
+%                good_indices_raw                  Índices retenidos.
+%
+%    Notas:
+%    - En modo manual no se aplica además la máscara automática de QC.
+%    - quality conserva las banderas y el resumen de la campaña original;
+%      no se recalcula tras la selección. .dat y .dia no corresponden uno
+%      a uno, por lo que se conserva data.dat completo.
+%    - No se aceptan datos con cleaning_status = true. Debe quedar al menos
+%      un burst para calcular time_start y time_end.
+%    - El código contempla una ruta a NetCDF y llama a
+%      wsa_aquadopp_nc_read_raw, pero esa reconstrucción no incluye dat ni
+%      quality, utilizados después por esta función. Por tanto, esta ruta
+%      no constituye un flujo completo en v2.0.0; utilice el struct del lector.
+%    - No se modifican las muestras retenidas ni se aplican filtros.
+%
+%    Ejemplo:
+%        data = wsa_aquadopp_read('C:\datos\AQUADOPP');
+%        data_clean = wsa_aquadopp_clean(data);
+%        wsa_nc_write(data_clean, 'aquadopp_clean.nc', 'mounting_height', 0.50);
+%        % Sustituir 0.50 por la altura real respecto al fondo.
+%
+%    See also wsa_aquadopp_read, wsa_aquadopp_nc_read_raw, wsa_nc_write.
+
 % -------------------------------------------------------------------------
 % Universidad de Costa Rica
 % Escuela de Ingeniería Civil
 % Autor: Danny Garro Arias
 % Fecha de creación: 27/07/2026
 % Fecha de modificación: 27/07/2026
+% Revisión de documentación: 12/10/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
