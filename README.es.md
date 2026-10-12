@@ -42,16 +42,19 @@ y RBR y funciones comunes de escritura a NetCDF y preprocesamiento.
 
 | Función | Descripción |
 | --- | --- |
-| `wsa_awac_read` | Lee datos crudos AWAC. |
-| `wsa_awac_clean` | Limpia bursts AWAC según control de calidad. |
-| `wsa_aquadopp_read` | Lee datos AQUADOPP y organiza los bursts diagnósticos con banderas de control de calidad. |
-| `wsa_aquadopp_clean` | Elimina bursts AQUADOPP según control de calidad o índices manuales. |
-| `wsa_rbr_read` | Lee bursts de presión RBR y metadatos exportados por Ruskin, con control de calidad. |
-| `wsa_rbr_clean` | Elimina bursts RBR según control de calidad o índices manuales. |
+| `wsa_awac_read` | Lee datos crudos AWAC y realiza control de calidad. |
+| `wsa_awac_clean` | Limpia bursts AWAC según control de calidad o de forma manual. |
+| `wsa_aquadopp_read` | Lee datos crudos AQUADOPP y realiza control de calidad. |
+| `wsa_aquadopp_clean` | Limpia bursts AQUADOPP según control de calidad o de forma manual. |
+| `wsa_rbr_read` | Lee datos crudos RBR y realiza control de calidad. |
+| `wsa_rbr_clean` | Limpia bursts RBR según control de calidad o de forma manual. |
 | `wsa_nc_write` | Escribe datos crudos o limpios de AWAC, AQUADOPP o RBR a formato NetCDF. |
 | `wsa_nc_preprocess` | Identifica el instrumento y preprocesa las señales disponibles en el NetCDF. |
 
-Nota: Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
+Notas: 
+- Flujo de AWAC probado con AWAC 1Mhz de Primera Generación.
+- Flujo de AQUADOPP probado con AQUADOPP 300 m - Legacy
+- Flujo de RBR probado con RBR solo 3
 
 ## Ejemplos de uso
 
@@ -168,11 +171,9 @@ wsa_nc_write(data_clean, "aquadopp_clean.nc", 'mounting_height', mounting_height
 info = wsa_nc_preprocess("aquadopp_clean.nc");
 ```
 
-**Alcance de esta implementación:** la lectura fija el muestreo diagnóstico
+**Nota:** la lectura fija el muestreo diagnóstico
 en 1 Hz. El preprocesamiento calcula la posición de la celda de velocidad
-como `blanking_distance + 1.5 * 0.75` m. Estas suposiciones deben coincidir
-con la configuración de los datos utilizados; no se ajustan automáticamente
-a cualquier configuración AQUADOPP.
+como `blanking_distance + 1.5 * 0.75` m. Esta configuración esta asociada con el modelo de AQUADOPP utilizado (AQUADOPP 300 m - Legacy), en caso de usar datos de otro modelo se deben hacer los cambios correspondientes.
 
 ### RBR
 
@@ -257,7 +258,7 @@ El filtrado predeterminado hasta 1/2 Hz requiere un muestreo de al menos 1 Hz.
 ## Instalación
 Se muestran tres opciones para instalación del toolbox. Se recomienda utilizar la 1 o 2, debido a  que el archivo de toolbox .mltbx resuelve los paths de las funciones de forma automática.
 
-### 1) Desde Matlab File Exchange
+### 1) Desde Matlab File Exchange (No dispoible para esta versión)
 En Matlab, ir a la pestaña Home, y abrir Get Add-Ons. Buscar el toolbox como Wave Spectral Analysis e instalar o descargar el archivo de toolbox .mltbx. Al usar este método se descarga el último release publicado en GitHub.
 
 ### 2) Desde el release de Github
