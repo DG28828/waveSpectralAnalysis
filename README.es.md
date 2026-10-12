@@ -282,6 +282,8 @@ which wsa_psdwb
 
 Ambos comandos deben devolver rutas dentro de la carpeta `toolbox`.
 
+**Nota:** para la versión v2.0.0 se debe cambiar a la rama release/v2.0.0
+
 
 ## Convenciones y notas
 
