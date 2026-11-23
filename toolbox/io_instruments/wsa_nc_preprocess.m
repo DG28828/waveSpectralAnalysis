@@ -25,7 +25,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 %                 RBR: tiempo y presión; para presión absoluta se necesita
 %                      atmospheric_pressure_dbar finita y pressure_reference.
 %
-%    Parámetros Nombre-Valor (opcionales; lógicos escalares):
+%    Parámetros Nombre-Valor (opcionales):
 %        'ast_corr_flag'  Corregir las dos señales AST mediante wsa_ast_corr.
 %                         Por defecto: true. Se omite si no hay AST.
 %                         false conserva los datos AST para combinar y remover tendencia;
@@ -38,7 +38,12 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 %                         Por defecto: true. Es independiente de filter_flag.
 %                         false deja las salidas IG sin datos disponibles;
 %                         no las sustituye por señales sin filtrar.
-%
+%       'total_filter_lims' Al ser utilizado se pueden configurar los
+%                           limites inferior y superior del filtro para el 
+%                           espectro total. Por defecto: [1/30, 1/2]
+%       'IG_filter_lims' Al ser utilizado se pueden configurar los
+%                           limites inferior y superior del filtro para el 
+%                           espectro total. Por defecto: [1/300, 1/30]
 %    Argumento de salida:
 %        info - Struct con los siguientes grupos principales:
 %            instrument_type          Instrumento identificado.
@@ -127,7 +132,7 @@ function info = wsa_nc_preprocess(ncfile, varargin)
 % Autor: Danny Garro Arias
 % Fecha de creación: 10/03/2026
 % Fecha de modificación: 06/08/2026
-% Revisión de documentación: 12/10/2026
+% Revisión de documentación: 23/11/2026
 % -------------------------------------------------------------------------
 
 %% Manejo de entradas
@@ -140,11 +145,17 @@ addParameter(p, 'ast_corr_flag', true, @(x) islogical(x) && isscalar(x))
 addParameter(p, 'filter_flag', true, @(x) islogical(x) && isscalar(x));
 addParameter(p, 'IG_filter_flag', true, @(x) islogical(x) && isscalar(x));
 
+%Configuracion de limites de filtrado
+addParameter(p, 'total_filter_lims', [1/30, 1/2])
+addParameter(p, 'IG_filter_lims', [1/300, 1/30])
+
 parse(p, ncfile, varargin{:});
 
 ast_corr_flag = p.Results.ast_corr_flag;
 filter_flag = p.Results.filter_flag;
 IG_filter_flag = p.Results.IG_filter_flag;
+total_filter_lims = p.total_filter_lims;
+IG_filter_lims = p.IG_filter_lims;
 
 %% Verificaciones iniciales
 
@@ -668,12 +679,12 @@ ast_proc_comb_IG = nan(2*nSamples, nBursts);
 
 %% Filtrado de las señales de presión, ast y velocidades en banda de freuencia apta para el análisis direccional
 
-% Se aplica un filtro pasabanda con las siguientes frecuencias de corte:
+% Se aplica un filtro pasabanda con las siguientes frecuencias de corte por defecto, a no ser que e configuren en la entrada:
 %  - Frecuecia de corte inferior: 1/30 Hz (30 s)
 %  - Frecuencia de corte superior: 1/2 Hz (2 s)
 
-f_i = 1/30;
-f_f = 1/2; 
+f_i = total_filter_lims(1);
+f_f = total_filter_lims(2); 
 
 if filter_flag
 
@@ -731,8 +742,8 @@ end
 %  - Frecuecia de corte inferior: 1/300 Hz (300 s)
 %  - Frecuencia de corte superior: 1/30 Hz (30 s)
 
-f_i_IG = 1/300;
-f_f_IG = 1/30; 
+f_i_IG = IG_filter_lims(1);
+f_f_IG = IG_filter_lims(2); 
 
 if IG_filter_flag
 
