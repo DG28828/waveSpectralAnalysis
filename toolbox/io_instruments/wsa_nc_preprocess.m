@@ -154,8 +154,8 @@ parse(p, ncfile, varargin{:});
 ast_corr_flag = p.Results.ast_corr_flag;
 filter_flag = p.Results.filter_flag;
 IG_filter_flag = p.Results.IG_filter_flag;
-total_filter_lims = p.total_filter_lims;
-IG_filter_lims = p.IG_filter_lims;
+total_filter_lims = p.Results.total_filter_lims;
+IG_filter_lims = p.Results.IG_filter_lims;
 
 %% Verificaciones iniciales
 
